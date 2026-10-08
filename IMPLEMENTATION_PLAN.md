@@ -5,7 +5,7 @@ The repository starts from a Create Next App template. Build one phase per execu
 ## Checklist
 
 - [x] Phase 0 — Discovery
-- [ ] Phase 1 — Foundation
+- [x] Phase 1 — Foundation
 - [ ] Phase 2 — Database + RLS
 - [ ] Phase 3 — Auth
 - [ ] Phase 4 — Transactions

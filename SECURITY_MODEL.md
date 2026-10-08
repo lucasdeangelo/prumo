@@ -36,7 +36,8 @@ Production gate includes dependency review, secret exposure scan, webhook verifi
 | High | Cross-user relation through foreign keys | Master columns reference IDs without ownership constraint | Composite same-user FKs/triggers and adversarial tests |
 | High | Duplicate facts on sync/payment | No idempotency infrastructure exists | Unique provider identity, transactional keys, locking, replay tests |
 | High | External IDs may have wrong uniqueness scope | Master proposes global unique Pluggy IDs | Verify provider contracts, scope unique indexes correctly |
-| High | No TypeScript strict, validation, tests, or env schema | Current files are JavaScript; only lint/build scripts | Phase 1 foundation and subsequent test gates |
-| Medium | Starter page and metadata are English/demo content | `app/page.js`, `app/layout.js` | Replace in Phase 1 with Portuguese mobile shell |
+| High | No database isolation or auth enforcement | No schema, RLS, or protected routes exist after Phase 1 | Phase 2 RLS, Phase 3 auth, and A/B tests |
+| Medium | Environment validation is lazy until a Supabase client is created | Public landing page does not instantiate a client | Phase 3 should validate required auth configuration on the relevant server paths |
 | Medium | LocalAuth session persistence and unofficial WhatsApp library operations | Worker not present | Isolate worker; document operational and provider risks in Phase 13 |
 | Medium | Backup, restore, retention, and consent undefined | No operational documents/config | Define and exercise before production |
+| Medium | Development tooling includes a high-severity transitive `braces` advisory | `npm audit` reports GHSA-vfj7-8cjw-p6xm through `eslint-config-next`; `npm audit --omit=dev` reports zero | Track upstream fix; do not accept untrusted glob patterns in tooling; reassess in Phase 16 |

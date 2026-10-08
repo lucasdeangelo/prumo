@@ -35,3 +35,7 @@ External adapters have typed errors, timeouts, bounded retries on idempotent ope
 ## Decisions and phase boundary
 
 Retain the starter code until Phase 1 replaces it as part of foundation work. Phase 0 adds documentation only. Phase 1 establishes strict TypeScript, tooling, UI foundation, environment validation, and Supabase clients. Phase 2 creates the schema and proves RLS isolation before any user financial feature is built. See [DATA_MODEL.md](DATA_MODEL.md), [SECURITY_MODEL.md](SECURITY_MODEL.md), and [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+
+## Phase 1 implementation note (2026-10-08)
+
+The starter is now strict TypeScript with a Portuguese mobile landing page, Tailwind tokens, local shadcn-style `Button` and `Badge` components, Lucide, Zod environment parsing, Vitest, and browser/server Supabase client factories. The client factories are not used by a product route yet, so no credentials are needed to build the public landing page; they validate configuration when called. The browser client receives only the publishable key. The server client uses cookie-based SSR support and is marked `server-only`; session refresh and route protection are Phase 3 work. Starter cache component options were removed so private finance pages will not inherit opt-in caching. No data or auth capability exists yet.
