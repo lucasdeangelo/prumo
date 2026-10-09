@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: prumo_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: local-test-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d prumo_test"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - ../../supabase/migrations:/workspace/migrations:ro
+      - ./:/workspace/tests:ro

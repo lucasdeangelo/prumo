@@ -1,0 +1,2 @@
+-- Intentionally empty in Phase 2. Default tags are created per authenticated user
+-- during onboarding in Phase 3; no fictional financial data is seeded.
