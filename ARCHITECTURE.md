@@ -39,3 +39,7 @@ Retain the starter code until Phase 1 replaces it as part of foundation work. Ph
 ## Phase 1 implementation note (2026-10-08)
 
 The starter is now strict TypeScript with a Portuguese mobile landing page, Tailwind tokens, local shadcn-style `Button` and `Badge` components, Lucide, Zod environment parsing, Vitest, and browser/server Supabase client factories. The client factories are not used by a product route yet, so no credentials are needed to build the public landing page; they validate configuration when called. The browser client receives only the publishable key. The server client uses cookie-based SSR support and is marked `server-only`; session refresh and route protection are Phase 3 work. Starter cache component options were removed so private finance pages will not inherit opt-in caching. No data or auth capability exists yet.
+
+## Phase 2 implementation note (2026-10-09)
+
+An atomic, versioned migration now creates the 15 planned tables with RLS enabled and forced. Authenticated access is read-only at this stage; write grants remain closed until the relevant audited application operations are built. Same-user composite FKs prevent cross-tenant links even in privileged writes. The migration and A/B security tests passed in local Supabase PostgreSQL 17 and disposable PostgreSQL 16. This does not constitute a migration of any remote project. The domain/application/repository layers and auth routes remain future work.

@@ -6,7 +6,7 @@ The repository starts from a Create Next App template. Build one phase per execu
 
 - [x] Phase 0 — Discovery
 - [x] Phase 1 — Foundation
-- [ ] Phase 2 — Database + RLS
+- [x] Phase 2 — Database + RLS
 - [ ] Phase 3 — Auth
 - [ ] Phase 4 — Transactions
 - [ ] Phase 5 — Accounts
@@ -58,4 +58,4 @@ Phase 2 adds numbered migrations in dependency order documented in [DATA_MODEL.m
 
 ## Known blockers for future phases
 
-There is no Supabase project or test database configuration in this repository. Provider credentials, webhook contract, and WhatsApp hosting/session storage are also not configured. These do not block Phase 0, but Phase 2/10/13 require their respective environments or documented safe local substitutes. Before implementing Pluggy or other external adapters, read current official documentation. Financial retention and account deletion semantics require a product/legal decision before production.
+The Phase 2 schema and A/B isolation tests passed against disposable PostgreSQL 16 and local Supabase PostgreSQL 17. No remote project has been migrated. Provider credentials, webhook contract, and WhatsApp hosting/session storage are not configured. Phases 10 and 13 require their respective environments. Before implementing Pluggy or other external adapters, read current official documentation. Financial retention and account deletion semantics require a product/legal decision before production.

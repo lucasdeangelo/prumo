@@ -1,36 +1,47 @@
 # Prumo
 
-SaaS de finanças pessoais em desenvolvimento por fases. **Fase 1 concluída:** há uma base Next.js/TypeScript e uma página pública de apresentação. Ainda não existem cadastro, dados financeiros, banco configurado ou integrações funcionais. Consulte [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), [SECURITY_MODEL.md](SECURITY_MODEL.md), [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) e [relatório da Fase 1](docs/phases/PHASE_1_REPORT.md).
+SaaS de finanças pessoais em desenvolvimento por fases. **Fase 2 concluída:** há schema versionado e RLS, mas ainda não há cadastro, login ou funcionalidade financeira. A página `/` é uma apresentação, não um dashboard com dados reais. Veja [arquitetura](ARCHITECTURE.md), [modelo de dados](DATA_MODEL.md), [modelo de segurança](SECURITY_MODEL.md), [plano](IMPLEMENTATION_PLAN.md) e [relatório da Fase 2](docs/phases/PHASE_2_REPORT.md).
 
-## Requisitos e instalação
+## Requisitos e desenvolvimento
 
-- Node.js 20.9 ou superior, npm e acesso ao registro de pacotes para a primeira instalação.
-- Ambiente local verificado: Node.js 24.13.0, npm 11.19.1.
+- Node.js 20.9 ou superior, npm e Docker Desktop para testes de banco.
+- Ambiente verificado: Node.js 24.13.0, npm 11.19.1, Docker 29.8.0.
 
 ```bash
 npm ci
 npm run dev
 ```
 
-Abra `http://localhost:3000`. A página pública funciona sem Supabase. Ela é uma apresentação do produto planejado, não um dashboard nem um modo demo com dados reais.
+Abra `http://localhost:3000`. A página pública funciona sem conexão com Supabase.
 
 ## Ambiente
 
-Copie `.env.example` para `.env.local` quando for configurar Supabase. As chaves públicas seguem a nomenclatura atual do provedor: `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. O projeto aceita HTTPS e HTTP apenas para `localhost` ou `127.0.0.1`. As factories Supabase validam esses valores ao serem chamadas e falham com mensagem clara se estiverem ausentes ou inválidos. A página pública não as chama.
+Use `.env.example` como referência para criar `.env.local` quando configurar um ambiente Supabase. O navegador recebe apenas `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. As factories validam essas variáveis ao serem chamadas. Variáveis como `SUPABASE_SERVICE_ROLE_KEY`, segredos Pluggy, IA e bridge interna pertencem somente ao servidor e ainda não são usadas. Nunca coloque segredo sob `NEXT_PUBLIC_`. `.env.local` é ignorado pelo Git.
 
-`SUPABASE_SERVICE_ROLE_KEY`, segredos Pluggy, IA e bridge interna são opções reservadas ao servidor para fases posteriores. Não use prefixo `NEXT_PUBLIC_` nesses segredos. Nenhum cliente com service role existe nesta fase. Arquivos `.env*` são ignorados, exceto `.env.example`.
+Separe desenvolvimento, staging e produção. Não use um banco remoto de produção para testes.
 
-## Comandos
+## Migrations e testes de RLS
+
+A migration inicial é [202610090001_initial_finance_schema.sql](supabase/migrations/202610090001_initial_finance_schema.sql). Ela cria as 15 tabelas, constraints, índices, grants e RLS em uma única transação. `supabase/seed.sql` está vazio de propósito; tags padrão serão criadas por usuário na Fase 3.
+
+Para iniciar o banco local oficial do Supabase e aplicar as migrations:
+
+```bash
+npx supabase db start --yes
+```
+
+`npm run test:db` cria um PostgreSQL descartável sem porta publicada, aplica as migrations e testa isolamento A/B, vínculos entre tenants e invariantes de histórico/idempotência. O comando remove seu próprio contêiner ao terminar. O teste não se conecta ao Supabase remoto.
 
 ```bash
 npm run lint
 npm run typecheck
 npm test
+npm run test:db
 npm run build
 ```
 
-Vitest testa o parser de ambiente nesta fase. Testes de isolamento, banco e regras financeiras começam nas fases correspondentes. O projeto usa `strict: true` em TypeScript.
+O mesmo SQL de isolamento foi executado manualmente contra o banco local oficial do Supabase PostgreSQL 17. Nenhuma migration foi aplicada a um projeto remoto. Para mudanças posteriores, crie uma nova migration; não altere uma já aplicada em staging ou produção.
 
-## Migrations, bot, sandbox e deploy
+## Bot, sandbox e deploy
 
-Não há migrations nesta fase. A Fase 2 criará o schema versionado e RLS; a Fase 3 cuidará de autenticação, sessão e proteção de rotas. O worker de WhatsApp, Pluggy sandbox e infraestrutura de deploy ainda não existem. A arquitetura prevista é Next.js na Vercel, PostgreSQL/Auth no Supabase e worker opcional em VPS com sessão persistente. Nenhum ambiente de produção foi validado.
+Não há worker de WhatsApp nem Pluggy sandbox. O deploy previsto é Next.js na Vercel, PostgreSQL/Auth no Supabase e worker opcional em VPS com sessão persistente. Nenhum ambiente de produção foi validado.

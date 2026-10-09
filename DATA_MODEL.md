@@ -4,7 +4,19 @@
 
 All schema changes use numbered, immutable Supabase SQL migrations. UUIDs identify internal records. User-owned rows carry `user_id`; composite foreign keys or equivalent database triggers ensure referenced rows belong to the same user. Application authorization and RLS are additional layers. `created_at` and `updated_at` use `timestamptz`; calendar dates use `date`. Amounts and balances use `BIGINT` cents. Source payloads, secrets, and bank credentials are not retained by default.
 
-The master's table list is the baseline: `profiles`, `pluggy_items`, `accounts`, `tags`, `tag_rules`, `transactions`, `upcoming_bills`, `subscriptions`, `subscription_history`, `alerts`, `whatsapp_links`, `webhook_events`, `idempotency_keys`, `audit_logs`, and `notification_outbox`. Do not treat the proposed shape as an applied schema; no migration exists yet.
+The master's table list is the baseline: `profiles`, `pluggy_items`, `accounts`, `tags`, `tag_rules`, `transactions`, `upcoming_bills`, `subscriptions`, `subscription_history`, `alerts`, `whatsapp_links`, `webhook_events`, `idempotency_keys`, `audit_logs`, and `notification_outbox`.
+
+## Phase 2 schema (2026-10-09)
+
+`supabase/migrations/202610090001_initial_finance_schema.sql` creates all 15 tables, indexes, same-user composite foreign keys, amount/confidence checks, timestamps, and RLS in one atomic migration. It was applied from an empty database in isolated PostgreSQL 16 and local Supabase PostgreSQL 17. The proposed list below is historical design context; the migration is the current source of truth.
+
+- `profiles.id` restricts deletion of an Auth user while a profile exists. All financial tables also restrict profile deletion. Account and Pluggy Item hard deletion nulls only their reference columns, preserving ledger rows. Subscription history restricts subscription deletion.
+- `transactions.amount_cents` is strictly positive; `type` carries direction. `balance_cents` may be signed. Imported facts have `provider_description`; editable description has `user_description`. Provider transaction uniqueness uses `(user_id, provider_reference_scope, pluggy_transaction_id)`, where the adapter must define a stable scope from the actual provider identity. `external_reference` is unique per user and source when present.
+- `subscription_history` includes `user_id` for direct ownership and composite FKs. `upcoming_bills` permits at most one non-deleted bill per matched transaction. Idempotency keys are unique per user/scope/key including null system users; outbox dedupe is unique per user/channel/key. Webhooks require an external event ID or a computed dedupe key.
+- `whatsapp_links` stores hash/expiry/attempts and permits one active normalized phone. `upcoming_bills` records explicit units and intervals for custom recurrence. `accounts.balance_synced_at` distinguishes provider balance snapshots from ledger aggregates.
+- Direct authenticated access is read-only in Phase 2. Mutation policies exist for later phases but table DML grants are withheld until audited application operations are implemented. Internal event, idempotency, and outbox tables have no authenticated policies. `service_role` bypasses RLS and must never be used without backend ownership checks.
+
+Default tags are seeded per user during Phase 3 onboarding. `supabase/seed.sql` is intentionally empty; it never inserts demo financial data. No remote Supabase project migration has been applied.
 
 ## Relationships and corrections needed before migration
 

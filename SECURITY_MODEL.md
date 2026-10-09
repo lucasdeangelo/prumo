@@ -10,6 +10,8 @@ Enable and force RLS as appropriate on every user-data table. Direct rows use `u
 
 Phase 2 gate: create User A and User B in an isolated test database. For accounts, items, transactions, tags, rules, upcoming bills, subscriptions, alerts, and WhatsApp links, verify A cannot select, update, delete, or insert as B. Also test indirect references, nested reads, service-role entry points, and attempted linking to B's rows. A single leak is a blocker. Never run these tests against production.
 
+Phase 2 result: `tests/database/tenant_isolation.sql` passed with actual `auth.uid()` in local Supabase PostgreSQL 17 and with an isolated PostgreSQL 16 Auth fixture. It tests A/B SELECT/INSERT/UPDATE/DELETE denial across the required resources, own-row visibility, indirect history, composite FK rejection, internal table invisibility, and replay constraints. Temporary test-only DML grants exercise RLS policy behavior, then roll back. Production DML grants remain absent. Remote Supabase policy execution and backend/service-role authorization are not yet validated; these are later gates.
+
 ## Financial integrity and replay
 
 Use database uniqueness plus transactional idempotency, not an in-memory cache. Incoming financial operations supply or derive stable keys. Reusing a key with a different request hash fails. Webhook receive, dedupe, processing state, and retry handling are recorded. Sync uses provider identities scoped correctly. Bill payment/reconciliation and recurring creation lock relevant rows and write audit/outbox atomically. Multiple workers claim outbox rows safely; repeated jobs converge on one notification. Keep raw facts and user overrides distinguishable.
@@ -31,12 +33,12 @@ Production gate includes dependency review, secret exposure scan, webhook verifi
 
 | Severity | Risk | Evidence now | Required mitigation |
 | --- | --- | --- | --- |
-| Critical | No auth, RLS, or tenant boundary | Starter has no Supabase/schema/auth | Phases 2–3; block financial features until isolation passes |
-| Critical | Master schema cascades can erase ledger | `profiles -> auth.users` and `subscription_history -> subscriptions` cascade proposals | Explicit deletion/retention policy and non-cascading ledger links before migration |
-| High | Cross-user relation through foreign keys | Master columns reference IDs without ownership constraint | Composite same-user FKs/triggers and adversarial tests |
+| Critical | Auth and backend authorization are absent | Phase 2 has only schema/RLS; no user session or product route | Complete Phase 3 before exposing private data |
+| High | Account deletion/retention workflow not defined | Schema restricts profile and subscription deletion; account deletion preserves transactions | Design verified export/deletion process before production |
 | High | Duplicate facts on sync/payment | No idempotency infrastructure exists | Unique provider identity, transactional keys, locking, replay tests |
 | High | External IDs may have wrong uniqueness scope | Master proposes global unique Pluggy IDs | Verify provider contracts, scope unique indexes correctly |
-| High | No database isolation or auth enforcement | No schema, RLS, or protected routes exist after Phase 1 | Phase 2 RLS, Phase 3 auth, and A/B tests |
+| High | Direct financial writes would bypass domain/audit | Phase 2 intentionally grants authenticated users SELECT only | Add controlled write path and audit with each feature phase |
+| Medium | Generic `alerts.reference_id` has no ownership FK | Reference type is not known at schema level | Validate same-user target before dereference in Phase 15 |
 | Medium | Environment validation is lazy until a Supabase client is created | Public landing page does not instantiate a client | Phase 3 should validate required auth configuration on the relevant server paths |
 | Medium | LocalAuth session persistence and unofficial WhatsApp library operations | Worker not present | Isolate worker; document operational and provider risks in Phase 13 |
 | Medium | Backup, restore, retention, and consent undefined | No operational documents/config | Define and exercise before production |
