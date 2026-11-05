@@ -8,17 +8,24 @@ export const publicEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
 });
 
+const optionalSecret = z.string().min(1).optional();
+
 export const serverEnvSchema = publicEnvSchema.extend({
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
-  PLUGGY_CLIENT_ID: z.string().min(1).optional(),
-  PLUGGY_CLIENT_SECRET: z.string().min(1).optional(),
-  AI_PROVIDER: z.string().min(1).optional(),
-  AI_MODEL: z.string().min(1).optional(),
-  AI_API_KEY: z.string().min(1).optional(),
+  SUPABASE_SERVICE_ROLE_KEY: optionalSecret,
+  PLUGGY_CLIENT_ID: optionalSecret,
+  PLUGGY_CLIENT_SECRET: optionalSecret,
+  PLUGGY_WEBHOOK_SECRET: z.string().min(24).optional(),
+  PLUGGY_INCLUDE_SANDBOX: z.enum(["true", "false"]).optional(),
+  AI_PROVIDER: optionalSecret,
+  AI_MODEL: optionalSecret,
+  AI_API_KEY: optionalSecret,
   BOT_API_URL: z.url().optional(),
-  INTERNAL_API_SECRET: z.string().min(1).optional(),
+  INTERNAL_API_SECRET: z.string().min(32).optional(),
+  CRON_SECRET: z.string().min(24).optional(),
   APP_URL: z.url().optional(),
 });
+
+export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
 export function parsePublicEnv(input: Record<string, unknown>) {
   const parsed = publicEnvSchema.safeParse(input);

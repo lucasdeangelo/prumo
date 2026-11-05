@@ -1,11 +1,11 @@
-import { Check, CircleDashed, LockKeyhole, Smartphone, Waypoints } from "lucide-react";
+import { Check, LockKeyhole, MessageCircle, Smartphone, Waypoints } from "lucide-react";
+import Link from "next/link";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 const foundations = [
-  { icon: LockKeyhole, title: "Privacidade desde a base", description: "As regras de acesso e o isolamento entre usuários serão validados antes dos dados financeiros." },
-  { icon: Waypoints, title: "Histórico preservado", description: "Transações reais, contas futuras e assinaturas terão papéis distintos no sistema." },
+  { icon: LockKeyhole, title: "Privacidade desde a base", description: "Seus dados ficam isolados por usuário e a conexão com o banco é feita pela Pluggy, sem guardar sua senha." },
+  { icon: MessageCircle, title: "Direto no WhatsApp", description: "Mande “gastei 45 no mercado” e receba avisos de contas e assinaturas antes do vencimento." },
   { icon: Smartphone, title: "Pensado para o celular", description: "Uma experiência simples para acompanhar o que importa, em qualquer tela." },
 ];
 
@@ -19,30 +19,30 @@ export default function Home() {
             <span className="flex size-10 items-center justify-center rounded-2xl bg-emerald-800 text-white shadow-sm dark:bg-emerald-400 dark:text-emerald-950"><Waypoints aria-hidden="true" size={21} strokeWidth={2.5} /></span>
             <span className="text-xl font-semibold tracking-tight">prumo<span className="text-emerald-700 dark:text-emerald-400">.</span></span>
           </div>
-          <Badge variant="secondary" className="gap-1.5"><CircleDashed aria-hidden="true" size={14} /> Em construção</Badge>
+          <Button asChild variant="ghost" size="sm"><Link href="/login">Entrar</Link></Button>
         </header>
 
         <section className="grid gap-10 py-14 sm:py-20 lg:grid-cols-[1fr_0.8fr] lg:items-center lg:gap-16" aria-labelledby="hero-title">
           <div className="max-w-xl">
             <p className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-emerald-800 dark:text-emerald-300"><span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" /> Finanças com os pés no chão</p>
             <h1 id="hero-title" className="text-balance text-4xl font-semibold leading-[1.12] tracking-tight sm:text-6xl">Clareza para cuidar do seu dinheiro.</h1>
-            <p className="mt-6 max-w-lg text-pretty text-base leading-7 text-muted-foreground sm:text-lg">O Prumo está sendo preparado para reunir movimentações, contas futuras e assinaturas em um lugar simples e confiável.</p>
+            <p className="mt-6 max-w-lg text-pretty text-base leading-7 text-muted-foreground sm:text-lg">Entradas e saídas com tags automáticas, contas futuras, assinaturas detectadas e um assistente no WhatsApp. Tudo pensado para o celular.</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button size="lg" disabled className="min-h-11 w-full sm:w-auto">Acesso em breve</Button>
-              <p className="self-center text-sm text-muted-foreground">Ainda não há cadastro ou dados conectados.</p>
+              <Button size="lg" asChild className="min-h-11 w-full sm:w-auto"><Link href="/signup">Criar conta grátis</Link></Button>
+              <Button size="lg" asChild variant="outline" className="min-h-11 w-full sm:w-auto"><Link href="/login">Já tenho conta</Link></Button>
             </div>
           </div>
 
           <div className="mx-auto w-full max-w-sm rounded-[2rem] border border-border bg-card p-5 shadow-[0_24px_80px_-35px_rgba(21,70,52,.35)] sm:p-6" aria-label="Prévia conceitual do produto">
             <div className="flex items-start justify-between gap-3">
-              <div><p className="text-xs font-medium uppercase tracking-[.16em] text-muted-foreground">Visão planejada</p><h2 className="mt-2 text-xl font-semibold">Tudo no seu ritmo</h2></div>
+              <div><p className="text-xs font-medium uppercase tracking-[.16em] text-muted-foreground">Como funciona</p><h2 className="mt-2 text-xl font-semibold">Tudo no seu ritmo</h2></div>
               <span className="rounded-full bg-emerald-100 p-2 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300"><Check aria-hidden="true" size={20} /></span>
             </div>
             <div className="mt-7 space-y-3">
               {[
-                ["01", "Entenda seu mês", "Receitas e despesas em contexto"],
-                ["02", "Antecipe compromissos", "Contas futuras sem confundir previsões"],
-                ["03", "Mantenha o histórico", "Cada movimentação com sua origem"],
+                ["01", "Entenda seu mês", "Entradas, saídas e gráficos por tag"],
+                ["02", "Antecipe compromissos", "Contas e assinaturas antes do vencimento"],
+                ["03", "Mantenha o histórico", "Banco, app ou WhatsApp, cada uma com sua origem"],
               ].map(([number, title, description]) => (
                 <div key={number} className="flex gap-4 rounded-2xl border border-border/70 bg-background/80 p-4">
                   <span className="font-mono text-xs font-semibold text-emerald-700 dark:text-emerald-400">{number}</span>
@@ -50,7 +50,7 @@ export default function Home() {
                 </div>
               ))}
             </div>
-            <p className="mt-5 text-xs text-muted-foreground">Prévia ilustrativa. Nenhuma informação financeira é exibida nesta fase.</p>
+            
           </div>
         </section>
 
@@ -66,7 +66,7 @@ export default function Home() {
             ))}
           </div>
         </section>
-        <footer className="border-t border-border py-6 text-sm text-muted-foreground">Prumo · Uma base em evolução.</footer>
+        <footer className="border-t border-border py-6 text-sm text-muted-foreground">Prumo · finanças com clareza.</footer>
       </div>
     </main>
   );

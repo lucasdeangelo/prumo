@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* The WhatsApp worker (and its Chromium session) is not UI; never scan it for classes. */
+@source not "../bot";
 
 :root {
   --background: #f6f8f5;
@@ -13,6 +15,15 @@
   --muted-foreground: #596b60;
   --border: #dce6de;
   --ring: #217c5b;
+  --danger: #b42318;
+  --success: #006300;
+  --warning-bg: #fff4d6;
+  --warning-fg: #7a4b00;
+  /* Chart roles (validated categorical slots 1-2, see dataviz palette). */
+  --series-income: #2a78d6;
+  --series-expense: #eb6834;
+  --chart-grid: #e1e0d9;
+  --chart-axis: #898781;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,6 +40,14 @@
     --muted-foreground: #a9bdaf;
     --border: #30473a;
     --ring: #72d8a7;
+    --danger: #ff8a80;
+    --success: #0ca30c;
+    --warning-bg: #3a2d10;
+    --warning-fg: #ffd27a;
+    --series-income: #3987e5;
+    --series-expense: #d95926;
+    --chart-grid: #2c2c2a;
+    --chart-axis: #898781;
   }
 }
 
@@ -45,6 +64,12 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
   --color-ring: var(--ring);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-fg: var(--warning-fg);
+  --color-income: var(--series-income);
+  --color-expense: var(--series-expense);
   --font-sans: var(--font-geist), Arial, Helvetica, sans-serif;
 }
 
@@ -53,3 +78,11 @@ html { color-scheme: light dark; }
 body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
 ::selection { background: #abdcbf; color: #10271c; }
 :focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+
+input, select, textarea { font-size: 16px; }
+.tabular { font-variant-numeric: tabular-nums; }
+/* Single-column grids let children shrink so long text truncates instead of widening the page.
+   In the base layer, so grid-cols-* utilities still override it. */
+@layer base {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+}

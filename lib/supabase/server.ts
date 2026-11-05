@@ -18,7 +18,7 @@ export async function createServerSupabaseClient() {
         try {
           cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
         } catch {
-          // Server Components cannot set cookies. A session refresh boundary is added with auth in Phase 3.
+          // Server Components cannot set cookies; proxy.ts refreshes the session on every request.
         }
       },
     },
