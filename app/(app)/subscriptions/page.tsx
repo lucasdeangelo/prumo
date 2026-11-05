@@ -1,3 +1,4 @@
+import Link from "next/link";
 
 import { subscriptionStatusAction } from "@/app/(app)/actions";
 import { Amount, IconLink, PageHeader, StatTile, StateBadge } from "@/components/app/bits";
@@ -10,6 +11,9 @@ import { formatDayShort } from "@/lib/domain/dates";
 import { formatBRL } from "@/lib/domain/money";
 import { FREQUENCY_LABEL, monthlyEquivalentCents } from "@/lib/domain/recurrence";
 import { listSubscriptions } from "@/lib/repositories/reads";
+import { UpdatedAt } from "@/components/app/couple";
+import { lastSyncAt, loadSharedPlans } from "@/lib/application/couple-data";
+import { getHousehold } from "@/lib/application/household";
 import type { Subscription } from "@/lib/types";
 
 export const metadata = { title: "Assinaturas · Prumo" };
@@ -43,9 +47,18 @@ function Row({ sub, children }: { sub: Subscription; children?: React.ReactNode 
   );
 }
 
-export default async function SubscriptionsPage() {
+export default async function SubscriptionsPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
+  const { aba } = await searchParams;
   const { user, db } = await requireUser();
-  const subs = await listSubscriptions(db, user.id);
+  const household = await getHousehold(user.id);
+  const partner = household?.partner ?? null;
+  const ours = Boolean(partner) && aba === "nossas";
+  const memberIds = [user.id, partner?.userId].filter(Boolean) as string[];
+  // Minhas: mine only. Nossas: what either of us marked as the couple's.
+  const subs = ours
+    ? (await loadSharedPlans(memberIds)).subscriptions
+    : (await listSubscriptions(db, user.id)).filter((s) => !partner || s.scope !== "ours");
+  const syncedAt = await lastSyncAt(memberIds);
   const active = subs.filter((s) => s.status === "active" || s.status === "paused");
   const candidates = subs.filter((s) => s.status === "candidate");
   const past = subs.filter((s) => s.status === "cancelled");
@@ -57,6 +70,22 @@ export default async function SubscriptionsPage() {
         title="Assinaturas"
         action={<IconLink href="/subscriptions/new" label="Nova assinatura" tone="tint"><PlusIcon className="size-5" strokeWidth={1.8} /></IconLink>}
       />
+      {partner ? (
+        <div className="grid gap-2">
+          <nav className="grid grid-cols-2 gap-1 rounded-full bg-muted p-1" aria-label="De quem">
+            {([["minhas", "Minhas"], ["nossas", "Nossas"]] as const).map(([value, label]) => {
+              const active = (ours ? "nossas" : "minhas") === value;
+              return (
+                <Link key={value} href={`/subscriptions?aba=${value}`} aria-current={active ? "page" : undefined} className={active ? "flex min-h-10 items-center justify-center rounded-full bg-card text-sm font-semibold text-primary no-underline shadow-[0_1px_3px_rgba(18,21,18,0.1)]" : "flex min-h-10 items-center justify-center rounded-full text-sm font-medium text-muted-foreground no-underline hover:text-foreground"}>
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
+          {ours ? <p className="px-1 text-[13px] text-muted-foreground">{household!.me.name} e {partner.name} veem</p> : null}
+        </div>
+      ) : null}
+      <UpdatedAt at={syncedAt} />
       <div className="grid grid-cols-2 gap-3">
         <StatTile label="Por mês" cents={monthly} tone="out" />
         <StatTile label="Por ano" cents={monthly * 12} hint={`${subs.filter((s) => s.status === "active").length} ativa(s)`} />
@@ -72,7 +101,7 @@ export default async function SubscriptionsPage() {
                   <p className="text-xs text-muted-foreground">
                     Detectada pelas cobranças repetidas{sub.detection_confidence ? ` · confiança ${Math.round(sub.detection_confidence * 100)}%` : ""}.
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className={sub.user_id && sub.user_id !== user.id ? "hidden" : "grid grid-cols-2 gap-2"}>
                     <StatusButton id={sub.id} status="active" label="É assinatura" variant="default" />
                     <StatusButton id={sub.id} status="rejected" label="Não é" />
                   </div>
@@ -90,7 +119,7 @@ export default async function SubscriptionsPage() {
             <ul className="divide-y divide-border">
               {active.map((sub) => (
                 <Row key={sub.id} sub={sub}>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className={sub.user_id && sub.user_id !== user.id ? "hidden" : "grid grid-cols-2 gap-2"}>
                     {sub.status === "active" ? <StatusButton id={sub.id} status="paused" label="Pausar" variant="ghost" /> : <StatusButton id={sub.id} status="active" label="Reativar" variant="ghost" />}
                     <StatusButton id={sub.id} status="cancelled" label="Cancelei" variant="ghost" />
                   </div>

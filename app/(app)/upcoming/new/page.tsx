@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/app/bits";
 import { BillForm } from "@/components/app/forms";
 import { Card } from "@/components/ui/card";
+import { getHousehold } from "@/lib/application/household";
 import { requireUser } from "@/lib/auth/session";
 import { todayIn } from "@/lib/domain/dates";
 import { listAccounts, listTags } from "@/lib/repositories/reads";
@@ -13,7 +14,7 @@ export default async function NewBillPage() {
   return (
     <div>
       <PageHeader title="Nova conta futura" back="/upcoming" />
-      <Card><BillForm tags={tags} accounts={accounts} today={todayIn()} /></Card>
+      <Card><BillForm tags={tags} accounts={accounts} today={todayIn()} partnerName={(await getHousehold(user.id))?.partner?.name ?? null} /></Card>
     </div>
   );
 }

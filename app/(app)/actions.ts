@@ -6,15 +6,16 @@ import { z } from "zod";
 
 import { requireUser } from "@/lib/auth/session";
 import { cancelBill, createBill, markBillPaid } from "@/lib/application/bills";
-import { disconnectItem, refreshAndSyncItem, registerItem } from "@/lib/application/pluggy-sync";
+import { refreshAndSyncItem } from "@/lib/application/pluggy-sync";
 import { createSubscription, runSubscriptionDetection, setSubscriptionStatus } from "@/lib/application/subscriptions";
 import { createTransaction, deleteTransaction, DomainError, updateTransaction } from "@/lib/application/transactions";
+import { getHousehold } from "@/lib/application/household";
 import { createLinkCode, unlinkWhatsapp } from "@/lib/application/whatsapp";
 import { isIsoDate } from "@/lib/domain/dates";
 import { parseBRL } from "@/lib/domain/money";
 import { FREQUENCIES } from "@/lib/domain/recurrence";
-import { ConfigurationError, getServerEnv } from "@/lib/env.server";
-import { createConnectToken, PluggyError } from "@/lib/integrations/pluggy";
+import { ConfigurationError } from "@/lib/env.server";
+import { PluggyError } from "@/lib/integrations/pluggy";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type FormState = { error?: string; ok?: string } | undefined;
@@ -52,6 +53,8 @@ function refresh() {
 
 // ---------- Transactions ----------
 
+const scope = z.preprocess((v) => (v === "ours" ? "ours" : "mine"), z.enum(["mine", "ours"]));
+
 const transactionSchema = z.object({
   type: z.enum(["credit", "debit"]),
   amount: money,
@@ -59,6 +62,7 @@ const transactionSchema = z.object({
   date,
   tagId: optionalId,
   accountId: optionalId,
+  scope,
 });
 
 export async function createTransactionAction(_: FormState, formData: FormData): Promise<FormState> {
@@ -128,6 +132,7 @@ const billSchema = z.object({
   tagId: optionalId,
   accountId: optionalId,
   notifyDaysBefore: z.coerce.number().int().min(0).max(30),
+  scope,
 });
 
 export async function createBillAction(_: FormState, formData: FormData): Promise<FormState> {
@@ -176,6 +181,7 @@ const subscriptionSchema = z.object({
   nextChargeDate: date,
   tagId: optionalId,
   notifyDaysBefore: z.coerce.number().int().min(0).max(30),
+  scope,
 });
 
 export async function createSubscriptionAction(_: FormState, formData: FormData): Promise<FormState> {
@@ -226,8 +232,12 @@ export async function createTagAction(_: FormState, formData: FormData): Promise
     excluded_from_totals: parsed.data.excluded === "on",
   });
   if (error) return { error: error.code === "23505" ? "Já existe uma tag com esse nome." : "Falha ao criar tag." };
+  const partnerId = (await getHousehold(user.id))?.partner?.userId;
+  if (partnerId) {
+    await createAdminClient().from("tags").insert({ user_id: partnerId, name: parsed.data.name, color: parsed.data.color, excluded_from_totals: parsed.data.excluded === "on" });
+  }
   refresh();
-  return { ok: "Tag criada." };
+  return { ok: partnerId ? "Tag criada para os dois." : "Tag criada." };
 }
 
 export async function createRuleAction(_: FormState, formData: FormData): Promise<FormState> {
@@ -247,8 +257,17 @@ export async function createRuleAction(_: FormState, formData: FormData): Promis
     priority: 20,
   });
   if (error) return { error: "Falha ao criar regra." };
+  // The same rule for the partner, pointing to their tag with the same name.
+  const partnerId = (await getHousehold(user.id))?.partner?.userId;
+  if (partnerId) {
+    const { data: mine } = await admin.from("tags").select("name").eq("user_id", user.id).eq("id", parsed.data.tagId).maybeSingle();
+    const { data: theirs } = mine ? await admin.from("tags").select("id").eq("user_id", partnerId).eq("name", mine.name).maybeSingle() : { data: null };
+    if (theirs) {
+      await admin.from("tag_rules").insert({ user_id: partnerId, pattern: parsed.data.pattern.toLowerCase(), pattern_type: parsed.data.patternType, tag_id: theirs.id, priority: 20 });
+    }
+  }
   refresh();
-  return { ok: "Regra criada. Vale para as próximas importações." };
+  return { ok: partnerId ? "Regra criada para os dois. Vale para as próximas importações." : "Regra criada. Vale para as próximas importações." };
 }
 
 export async function deleteRuleAction(formData: FormData) {
@@ -283,32 +302,7 @@ export async function archiveAccountAction(formData: FormData) {
   refresh();
 }
 
-export async function pluggyConnectTokenAction(itemId?: string): Promise<{ token?: string; includeSandbox?: boolean; error?: string }> {
-  const { user } = await requireUser();
-  try {
-    if (itemId) {
-      const { data } = await createAdminClient().from("pluggy_items").select("id").eq("user_id", user.id).eq("pluggy_item_id", itemId).maybeSingle();
-      if (!data) return { error: "Conexão não encontrada." };
-    }
-    const token = await createConnectToken(user.id, itemId);
-    return { token, includeSandbox: getServerEnv().PLUGGY_INCLUDE_SANDBOX === "true" };
-  } catch (error) {
-    return { error: friendly(error) };
-  }
-}
 
-export async function pluggyRegisterItemAction(itemId: string): Promise<FormState> {
-  const { user } = await requireUser();
-  const id = z.uuid().safeParse(itemId);
-  if (!id.success) return { error: "Conexão inválida." };
-  try {
-    const result = await registerItem(user.id, id.data);
-    refresh();
-    return { ok: `Conectado! ${result.accounts} conta(s), ${result.imported} movimentação(ões) importada(s).` };
-  } catch (error) {
-    return { error: friendly(error) };
-  }
-}
 
 export async function pluggySyncAction(_: FormState, formData: FormData): Promise<FormState> {
   const { user } = await requireUser();
@@ -325,11 +319,6 @@ export async function pluggySyncAction(_: FormState, formData: FormData): Promis
   }
 }
 
-export async function pluggyDisconnectAction(formData: FormData) {
-  const { user } = await requireUser();
-  await disconnectItem(user.id, z.uuid().parse(formData.get("itemId")));
-  refresh();
-}
 
 // ---------- WhatsApp ----------
 

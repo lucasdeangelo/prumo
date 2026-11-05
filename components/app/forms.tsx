@@ -28,11 +28,32 @@ function TagSelect({ tags, defaultValue, name = "tagId", emptyLabel = "Automáti
   );
 }
 
-export function TransactionForm({ tags, accounts, today }: { tags: Option[]; accounts: Option[]; today: string }) {
+
+/** "De quem é": Meu or Nosso, with what it means for the partner. Shown only to people in a couple. */
+function OwnerChoice({ partnerName, nossoHint, mineLabel = "Meu", oursLabel = "Nosso", defaultScope = "mine" }: { partnerName: string; nossoHint: string; mineLabel?: string; oursLabel?: string; defaultScope?: "mine" | "ours" }) {
+  const [scope, setScope] = useState<"mine" | "ours">(defaultScope);
+  return (
+    <fieldset className="grid gap-2">
+      <legend className="mb-1 text-sm font-medium">De quem é</legend>
+      <div className="grid grid-cols-2 gap-1 rounded-full bg-muted p-1" role="radiogroup">
+        {([["mine", mineLabel], ["ours", oursLabel]] as const).map(([value, label]) => (
+          <label key={value} className="relative">
+            <input type="radio" name="scope" value={value} checked={scope === value} onChange={() => setScope(value)} className="peer sr-only" />
+            <span className="flex min-h-10 cursor-pointer items-center justify-center rounded-full text-sm font-medium text-muted-foreground peer-checked:bg-card peer-checked:font-semibold peer-checked:text-primary peer-checked:shadow-[0_1px_3px_rgba(18,21,18,0.1)] peer-focus-visible:ring-2 peer-focus-visible:ring-ring">{label}</span>
+          </label>
+        ))}
+      </div>
+      <span className="text-[13px] text-muted-foreground">{scope === "ours" ? nossoHint : `Só você vê, a não ser que a conta seja compartilhada com ${partnerName}.`}</span>
+    </fieldset>
+  );
+}
+
+export function TransactionForm({ tags, accounts, today, partnerName }: { tags: Option[]; accounts: Option[]; today: string; partnerName?: string | null }) {
   const [state, action] = useActionState<FormState, FormData>(createTransactionAction, undefined);
   return (
     <form action={action} className="grid gap-4">
       <Segmented name="type" defaultValue="debit" options={[{ value: "debit", label: "Saída" }, { value: "credit", label: "Entrada" }]} />
+      {partnerName ? <OwnerChoice partnerName={partnerName} nossoHint={`Vocês dois veem, e entra no orçamento do lar.`} /> : null}
       <Field label="Valor">
         <Input name="amount" inputMode="decimal" placeholder="0,00" autoFocus required className="tabular text-2xl font-semibold" />
       </Field>
@@ -92,12 +113,13 @@ export function EditTransactionForm({
   );
 }
 
-export function BillForm({ tags, accounts, today }: { tags: Option[]; accounts: Option[]; today: string }) {
+export function BillForm({ tags, accounts, today, partnerName }: { tags: Option[]; accounts: Option[]; today: string; partnerName?: string | null }) {
   const [state, action] = useActionState<FormState, FormData>(createBillAction, undefined);
   const [recurrence, setRecurrence] = useState("monthly");
   return (
     <form action={action} className="grid gap-4">
       <Segmented name="type" defaultValue="payable" options={[{ value: "payable", label: "A pagar" }, { value: "receivable", label: "A receber" }]} />
+      {partnerName ? <OwnerChoice partnerName={partnerName} nossoHint="Conta do casal: aparece no Mês dos dois e avisa os dois." /> : null}
       <Field label="Descrição"><Input name="description" placeholder="Ex.: Aluguel, Luz, Cartão" required maxLength={120} /></Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Valor"><Input name="amount" inputMode="decimal" placeholder="0,00" required /></Field>
@@ -131,11 +153,12 @@ export function BillForm({ tags, accounts, today }: { tags: Option[]; accounts: 
   );
 }
 
-export function SubscriptionForm({ tags, today }: { tags: Option[]; today: string }) {
+export function SubscriptionForm({ tags, today, partnerName }: { tags: Option[]; today: string; partnerName?: string | null }) {
   const [state, action] = useActionState<FormState, FormData>(createSubscriptionAction, undefined);
   return (
     <form action={action} className="grid gap-4">
       <Field label="Serviço"><Input name="name" placeholder="Ex.: Netflix, Academia" required maxLength={80} /></Field>
+      {partnerName ? <OwnerChoice partnerName={partnerName} mineLabel="Minha" oursLabel="Nossa" nossoHint="Assinatura do casal: os dois veem e recebem o aviso da cobrança." /> : null}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Valor"><Input name="amount" inputMode="decimal" placeholder="0,00" required /></Field>
         <Field label="Próxima cobrança"><Input type="date" name="nextChargeDate" defaultValue={today} required /></Field>

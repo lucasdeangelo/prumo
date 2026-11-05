@@ -19,6 +19,7 @@ export type NewBill = {
   tagId?: string | null;
   accountId?: string | null;
   notifyDaysBefore: number;
+  scope?: "mine" | "ours";
 };
 
 export async function createBill(userId: string, input: NewBill) {
@@ -40,6 +41,7 @@ export async function createBill(userId: string, input: NewBill) {
     tag_id: input.tagId ?? null,
     account_id: input.accountId ?? null,
     notify_days_before: input.notifyDaysBefore,
+    scope: input.scope ?? "mine",
   });
   if (error) throw new Error(`Falha ao salvar conta: ${error.message}`);
 }

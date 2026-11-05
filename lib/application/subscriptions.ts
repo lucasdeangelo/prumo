@@ -115,7 +115,7 @@ export async function linkSubscriptionCharges(userId: string) {
 
 export async function createSubscription(
   userId: string,
-  input: { name: string; amountCents: number; frequency: Frequency; nextChargeDate: string; tagId?: string | null; notifyDaysBefore: number },
+  input: { name: string; amountCents: number; frequency: Frequency; nextChargeDate: string; tagId?: string | null; notifyDaysBefore: number; scope?: "mine" | "ours" },
 ) {
   const admin = createAdminClient();
   const normalized = normalizeMerchant(input.name) || input.name.toLowerCase().trim();
@@ -133,6 +133,7 @@ export async function createSubscription(
     tag_id: tagId,
     status: "active",
     notify_days_before: input.notifyDaysBefore,
+    scope: input.scope ?? "mine",
   };
   // Adding a service the detector already suggested (or the user rejected) turns that row active.
   const { error } = existing

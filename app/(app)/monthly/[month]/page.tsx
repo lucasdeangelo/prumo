@@ -8,7 +8,11 @@ import { TransactionList } from "@/components/app/transaction-list";
 import { CategoryBars } from "@/components/charts/category-bars";
 import { CumulativeLine } from "@/components/charts/cumulative-line";
 import { Card, CardTitle, EmptyState } from "@/components/ui/card";
+import { SpaceSwitcher, UpdatedAt } from "@/components/app/couple";
 import { requireUser } from "@/lib/auth/session";
+import { lastSyncAt, loadSharedHistory, loadSharedPlans } from "@/lib/application/couple-data";
+import { getHousehold } from "@/lib/application/household";
+import { currentSpace } from "@/lib/space";
 import { formatDayShort, formatMonthLong, isMonthKey, monthBounds, monthOf, todayIn } from "@/lib/domain/dates";
 import { formatBRL } from "@/lib/domain/money";
 import { summarizeMonth } from "@/lib/domain/summary";
@@ -28,13 +32,27 @@ export default async function MonthPage({ params, searchParams }: { params: Prom
   const current = monthOf(today);
   const { start, end, prev, next } = monthBounds(month);
   const prevBounds = monthBounds(prev);
+  const [household, space] = await Promise.all([getHousehold(user.id), currentSpace()]);
+  const partner = household?.partner ?? null;
+  const nosso = Boolean(partner) && space === "nosso";
+  const memberIds = [user.id, partner?.userId].filter(Boolean) as string[];
 
-  const [tags, transactions, previous, openBills] = await Promise.all([
-    listTags(db, user.id),
-    listTransactions(db, user.id, { from: start, to: end, limit: 3000 }),
-    listTransactions(db, user.id, { from: prevBounds.start, to: prevBounds.end, type: "debit", limit: 3000, columns: "amount_cents, type, transaction_date, tag_id" }),
-    listBills(db, user.id, { status: ["pending", "overdue"], to: end }),
-  ]);
+  // Meu: my own facts (what is Nosso lives in the shared space). Nosso: what both marked as Nosso.
+  const [tags, transactions, previous, openBills] = nosso
+    ? await (async () => {
+        const [plans, facts, prevFacts] = await Promise.all([
+          loadSharedPlans(memberIds),
+          loadSharedHistory(memberIds, start, end),
+          loadSharedHistory(memberIds, prevBounds.start, prevBounds.end),
+        ]);
+        return [plans.tags, facts, prevFacts.filter((t) => t.type === "debit"), plans.bills.filter((b) => b.due_date <= end)] as const;
+      })()
+    : await Promise.all([
+        listTags(db, user.id),
+        listTransactions(db, user.id, { from: start, to: end, limit: 3000 }).then((list) => (partner ? list.filter((t) => t.scope !== "ours") : list)),
+        listTransactions(db, user.id, { from: prevBounds.start, to: prevBounds.end, type: "debit", limit: 3000, columns: "amount_cents, type, transaction_date, tag_id, scope" }).then((list) => (partner ? list.filter((t) => t.scope !== "ours") : list)),
+        listBills(db, user.id, { status: ["pending", "overdue"], to: end }).then((list) => (partner ? list.filter((b) => b.scope !== "ours") : list)),
+      ]);
   // Upcoming bills live inside Mês (navigation map): open bills due up to the end of this month.
   const monthBills = month >= current ? openBills : [];
 
@@ -63,6 +81,10 @@ export default async function MonthPage({ params, searchParams }: { params: Prom
   const filterType = search.type === "credit" || search.type === "debit" ? search.type : undefined;
   const filtered = transactions.filter((t) => (filterTag === undefined || t.tag_id === filterTag) && (!filterType || t.type === filterType));
   const activeFilter = filterTag !== undefined || filterType;
+  // "Deve sobrar no fim do mês": what is left after the bills still open this month.
+  const toPay = monthBills.filter((b) => b.type === "payable").reduce((s, b) => s + b.amount_cents, 0);
+  const toReceive = monthBills.filter((b) => b.type === "receivable").reduce((s, b) => s + b.amount_cents, 0);
+  const projected = summary.netCents - toPay + toReceive;
   const deltaPct = previousSummary.expenseCents > 0 ? Math.round(((summary.expenseCents - previousSummary.expenseCents) / previousSummary.expenseCents) * 100) : null;
 
   return (
@@ -71,22 +93,28 @@ export default async function MonthPage({ params, searchParams }: { params: Prom
         title="Mês"
         action={<IconLink href={`/api/export/${month}`} label="Exportar CSV" download><DownloadIcon className="size-5" /></IconLink>}
       />
+      {household ? <SpaceSwitcher space={nosso ? "nosso" : "meu"} me={household.me} partner={partner} returnTo={`/monthly/${month}`} /> : null}
       <MonthSwitcher label={formatMonthLong(month)} prevHref={`/monthly/${prev}`} nextHref={month < current ? `/monthly/${next}` : undefined} />
+      {month === current ? <UpdatedAt at={await lastSyncAt(memberIds)} /> : null}
 
       <section className="flex flex-col gap-4 rounded-2xl bg-primary p-5 text-primary-foreground">
         <div className="flex flex-col gap-1.5">
-          <span className="label-mono text-[#cfe0d8]">Resultado do mês</span>
-          <span className="tabular text-[40px] font-medium leading-[1.05] tracking-[-0.03em]">{formatBRL(summary.netCents)}</span>
+          <span className="label-mono text-[#cfe0d8]">{month >= current ? "Deve sobrar no fim do mês" : "Sobrou no mês"}</span>
+          <span className="tabular text-[40px] font-medium leading-[1.05] tracking-[-0.03em]">{formatBRL(month >= current ? projected : summary.netCents)}</span>
         </div>
         <div className="grid grid-cols-3 gap-2 border-t border-white/20 pt-3.5">
           <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">Entrou<span className="tabular text-[15px] font-medium text-white">{formatBRL(summary.incomeCents)}</span></span>
           <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">Saiu<span className="tabular text-[15px] font-medium text-white">{formatBRL(summary.expenseCents)}</span></span>
-          <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">vs. anterior<span className="tabular text-[15px] font-medium text-white">{deltaPct === null ? "—" : `${deltaPct > 0 ? "+" : ""}${deltaPct}%`}</span></span>
+          {month >= current ? (
+            <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">Falta pagar<span className="tabular text-[15px] font-medium text-white">{formatBRL(toPay)}</span></span>
+          ) : (
+            <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">vs. anterior<span className="tabular text-[15px] font-medium text-white">{deltaPct === null ? "—" : `${deltaPct > 0 ? "+" : ""}${deltaPct}%`}</span></span>
+          )}
         </div>
       </section>
 
       <section className="grid gap-2.5">
-        <SectionHeader title="Para onde foi" />
+        <SectionHeader title="Para onde foi" action={nosso ? <Link href="/couple/budget" className="flex min-h-11 items-center text-sm font-medium no-underline">Orçamento</Link> : undefined} />
         <Card>
           {categoryRows.length > 0 ? <CategoryBars rows={categoryRows} totalCents={summary.expenseCents} limit={8} /> : <EmptyState title="Sem gastos neste mês" />}
         </Card>

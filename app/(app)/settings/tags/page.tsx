@@ -1,7 +1,10 @@
 import { Trash2 } from "lucide-react";
 
 import { deleteRuleAction } from "@/app/(app)/actions";
+import Link from "next/link";
+
 import { PageHeader, TagDot } from "@/components/app/bits";
+import { getHousehold } from "@/lib/application/household";
 import { RuleForm, TagForm } from "@/components/app/forms";
 import { Card, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
@@ -13,12 +16,18 @@ const TYPE_LABEL = { contains: "contém", description: "começa com", exact: "é
 
 export default async function TagsPage() {
   const { user, db } = await requireUser();
+  const partnerName = (await getHousehold(user.id))?.partner?.name ?? null;
   const [tags, rules] = await Promise.all([listTags(db, user.id), listRules(db, user.id)]);
   const tagById = new Map(tags.map((t) => [t.id, t]));
 
   return (
     <div className="grid gap-4">
-      <PageHeader title="Tags e regras" back="/settings" />
+      <PageHeader title="Tags e regras" subtitle={partnerName ? "Valem para os dois" : undefined} back="/settings" />
+      {partnerName ? (
+        <p className="text-sm text-muted-foreground">
+          Tags e regras de categoria são do casal. Para decidir o que {partnerName} vê, use as <Link href="/privacy/rules">regras de privacidade</Link>, que são só suas.
+        </p>
+      ) : null}
       <Card>
         <CardTitle>Como a tag é escolhida</CardTitle>
         <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">

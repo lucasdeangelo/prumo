@@ -1,129 +1,124 @@
-import { ChevronRight, LogOut, Tags } from "lucide-react";
 import Link from "next/link";
 
-import { archiveAccountAction, pluggyDisconnectAction, whatsappUnlinkAction } from "@/app/(app)/actions";
-import { Amount, PageHeader } from "@/components/app/bits";
-import { ManualAccountForm, SyncButton } from "@/components/app/forms";
-import { PluggyConnectButton } from "@/components/app/pluggy-connect-button";
-import { WhatsappLinkCode } from "@/components/app/whatsapp-link";
-import { Card, CardTitle } from "@/components/ui/card";
-import { SubmitButton } from "@/components/ui/form";
+import { PageHeader } from "@/components/app/bits";
+import { CoupleAvatars } from "@/components/app/couple";
+import { ChevronRightIcon, SignOutIcon } from "@/components/app/icons";
 import { requireUser } from "@/lib/auth/session";
-import { getServerEnv } from "@/lib/env.server";
-import { getWhatsappLink, listAccounts, listPluggyItems } from "@/lib/repositories/reads";
+import { listConnections } from "@/lib/application/connections";
+import { loadAccounts, loadBudgets, loadSplitRules } from "@/lib/application/couple-data";
+import { freeMoneyAllowance, getHousehold, listProposals } from "@/lib/application/household";
+import { listPrivacyRules } from "@/lib/application/privacy";
+import { sharePercentLabel } from "@/lib/domain/couple";
+import { todayIn } from "@/lib/domain/dates";
+import { formatBRL } from "@/lib/domain/money";
+import { getWhatsappLink } from "@/lib/repositories/reads";
 
 export const metadata = { title: "Ajustes · Prumo" };
 
-const STATUS_LABEL: Record<string, string> = {
-  UPDATED: "Atualizada",
-  UPDATING: "Atualizando…",
-  LOGIN_ERROR: "Precisa reconectar",
-  OUTDATED: "Desatualizada",
-  WAITING_USER_INPUT: "Aguardando você",
-};
+const since = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "America/Sao_Paulo" });
 
-const dateTime = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
+function Row({ href, title, detail, alert }: { href: string; title: string; detail?: string; alert?: boolean }) {
+  return (
+    <li>
+      <Link href={href} className="flex min-h-14 items-center gap-3 px-4 py-3 text-foreground no-underline hover:bg-[#fafaf8] hover:text-foreground">
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-medium">{title}</span>
+          {detail ? <span className={alert ? "block text-[13px] font-medium text-danger" : "block text-[13px] text-muted-foreground"}>{detail}</span> : null}
+        </span>
+        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+      </Link>
+    </li>
+  );
+}
+
+function Group({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <section className="grid gap-2">
+      <p className="label-mono px-1">{label}</p>
+      <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">{children}</ul>
+    </section>
+  );
+}
 
 export default async function SettingsPage() {
   const { user, db } = await requireUser();
-  const env = getServerEnv();
-  const [items, accounts, link] = await Promise.all([listPluggyItems(db, user.id), listAccounts(db, user.id), getWhatsappLink(db, user.id)]);
-  const pluggyReady = Boolean(env.PLUGGY_CLIENT_ID && env.PLUGGY_CLIENT_SECRET);
-  const linked = link?.verified_at ? link : null;
+  const household = await getHousehold(user.id);
+  const partner = household?.partner ?? null;
+  const [accounts, rules, connections, link, budgets, proposals, splitRules, freeMine] = await Promise.all([
+    loadAccounts([user.id]),
+    listPrivacyRules(user.id),
+    listConnections(user.id),
+    getWhatsappLink(db, user.id),
+    household ? loadBudgets(household.id) : Promise.resolve([]),
+    household ? listProposals(household.id) : Promise.resolve([]),
+    household ? loadSplitRules(household.id) : Promise.resolve(new Map()),
+    household ? freeMoneyAllowance(household.id, user.id, todayIn()) : Promise.resolve(null),
+  ]);
+  const shared = accounts.filter((a) => a.visibility !== "private").length;
+  const onlyMine = accounts.length - shared;
+  const banks = new Set(connections.map((c) => c.institution));
+  const failing = connections.filter((c) => c.state !== "ok").map((c) => c.institution);
+  const manual = accounts.filter((a) => a.is_manual);
+  const freeProposal = proposals.find((p) => p.kind === "free_money");
+  const budgetTotal = budgets.reduce((s, b) => s + b.limitCents, 0);
+  const equalIn = [...splitRules.entries()].filter(([, r]) => r.method === "equal").map(([c]) => c);
+  const people = household && partner ? (household.me.color === "blue" ? [household.me, partner] : [partner, household.me]) : [];
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-5">
       <PageHeader title="Ajustes" subtitle={user.email ?? undefined} />
 
-      <Card>
-        <CardTitle>Bancos (Open Finance)</CardTitle>
-        {items.length > 0 ? (
-          <ul className="mb-4 grid gap-4">
-            {items.map((item) => {
-              const itemAccounts = accounts.filter((a) => a.pluggy_item_id === item.id);
-              return (
-                <li key={item.id} className="grid gap-2 rounded-[10px] border border-border p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-medium">{item.institution_name ?? "Banco"}</p>
-                    <span className="text-xs text-muted-foreground">{STATUS_LABEL[item.status ?? ""] ?? item.status}</span>
-                  </div>
-                  {itemAccounts.map((a) => (
-                    <div key={a.id} className="flex justify-between text-sm">
-                      <span className="truncate text-muted-foreground">{a.name}</span>
-                      {a.balance_cents !== null ? <Amount cents={a.balance_cents} className="text-sm font-medium" /> : null}
-                    </div>
-                  ))}
-                  <p className="text-xs text-muted-foreground">Última sincronização: {item.last_sync_at ? dateTime.format(new Date(item.last_sync_at)) : "nunca"}</p>
-                  <SyncButton itemId={item.pluggy_item_id} />
-                  {item.status === "LOGIN_ERROR" || item.status === "OUTDATED" ? <PluggyConnectButton updateItemId={item.pluggy_item_id} label="Reconectar" /> : null}
-                  <form action={pluggyDisconnectAction}>
-                    <input type="hidden" name="itemId" value={item.pluggy_item_id} />
-                    <SubmitButton variant="ghost" className="w-full text-danger" pendingText="Desconectando…">Desconectar (mantém o histórico)</SubmitButton>
-                  </form>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="mb-3 text-sm text-muted-foreground">Conecte sua conta pela Pluggy para importar entradas e saídas com tags automáticas. O Prumo não vê sua senha do banco.</p>
-        )}
-        {items.some((item) => item.institution_name === "MeuPluggy") ? (
-          <p className="mb-3 rounded-[10px] bg-muted p-3 text-sm text-muted-foreground">
-            O MeuPluggy reúne todos os seus bancos numa conexão só. Para incluir outro banco, conecte-o em{" "}
-            <a href="https://meu.pluggy.ai" target="_blank" rel="noreferrer" className="font-medium text-primary underline">meu.pluggy.ai</a>. Ele entra na próxima atualização automática da Pluggy (a cada 24 h); depois toque em <strong>Sincronizar agora</strong>.
-          </p>
-        ) : null}
-        {pluggyReady ? <PluggyConnectButton /> : <p className="rounded-[10px] bg-muted p-3 text-sm text-muted-foreground">Configure PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET no servidor para habilitar.</p>}
-      </Card>
+      {partner && household ? (
+        <Link href="/couple" className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 text-foreground no-underline hover:text-foreground">
+          <CoupleAvatars people={people} size={40} />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-medium">{people.map((p) => p.name).join(" e ")}</span>
+            <span className="block text-[13px] text-muted-foreground">Perfil do casal · juntos no Prumo desde {since.format(new Date(household.createdAt))}</span>
+          </span>
+          <ChevronRightIcon className="size-4 text-muted-foreground" />
+        </Link>
+      ) : (
+        <Link href="/couple" className="flex min-h-14 items-center gap-3 rounded-2xl border border-dashed border-[#cdd0ca] bg-card/60 px-4 py-3 text-foreground no-underline hover:text-foreground">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-medium">Convidar seu par</span>
+            <span className="block text-[13px] text-muted-foreground">Ou entrar com o código que você recebeu</span>
+          </span>
+          <ChevronRightIcon className="size-4 text-muted-foreground" />
+        </Link>
+      )}
 
-      <Card>
-        <CardTitle>WhatsApp</CardTitle>
-        {linked ? (
-          <div className="grid gap-3">
-            <p className="text-sm">
-              {linked.chat_id?.endsWith("@lid") ? "WhatsApp vinculado" : <>Vinculado ao número <strong className="tabular">{linked.phone_normalized}</strong></>}
-              . Envie <em>ajuda</em> para o bot ver os comandos.
-            </p>
-            <form action={whatsappUnlinkAction}>
-              <SubmitButton variant="ghost" className="w-full text-danger" pendingText="…">Desvincular</SubmitButton>
-            </form>
-          </div>
-        ) : (
-          <div className="grid gap-3">
-            <p className="text-sm text-muted-foreground">Registre gastos por mensagem e receba avisos de contas e assinaturas.</p>
-            <WhatsappLinkCode botNumber={process.env.NEXT_PUBLIC_WHATSAPP_BOT_NUMBER} />
-          </div>
-        )}
-      </Card>
+      {partner ? (
+        <Group label="Privacidade · só você">
+          <Row href="/privacy/visibility" title={`O que ${partner.name} vê`} detail={`${shared} ${shared === 1 ? "conta compartilhada" : "contas compartilhadas"} · ${onlyMine} só sua${onlyMine === 1 ? "" : "s"}`} />
+          <Row href="/privacy/rules" title="Regras de privacidade" detail={rules.length ? `${rules.length} ${rules.length === 1 ? "ativa" : "ativas"}` : "Nenhuma"} />
+        </Group>
+      ) : null}
 
-      <Card>
-        <CardTitle>Contas manuais</CardTitle>
-        {accounts.filter((a) => a.is_manual).length > 0 ? (
-          <ul className="mb-4 grid gap-2">
-            {accounts.filter((a) => a.is_manual).map((a) => (
-              <li key={a.id} className="flex items-center gap-2 text-sm">
-                <span className="flex-1 truncate">{a.name}</span>
-                {a.balance_cents !== null ? <Amount cents={a.balance_cents} className="text-sm" /> : null}
-                <form action={archiveAccountAction}>
-                  <input type="hidden" name="id" value={a.id} />
-                  <SubmitButton variant="ghost" pendingText="…" className="text-xs">Arquivar</SubmitButton>
-                </form>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <ManualAccountForm />
-      </Card>
+      {partner && household ? (
+        <Group label="Combinados do casal">
+          <Row href="/couple/budget" title="Orçamento do lar" detail={budgetTotal ? `${formatBRL(budgetTotal)} por mês${household.budgetAlerts ? " · avisos em 80% e 100%" : ""}` : "Ainda não combinado"} />
+          <Row href="/couple/free-money" title="Dinheiro livre" detail={`${freeMine !== null ? `${formatBRL(freeMine)} cada` : "Ainda não combinado"}${freeProposal ? " · proposta aguardando" : ""}`} />
+          <Row href="/couple/approvals" title="Compras grandes" detail={household.approvalThresholdCents ? `Conversar antes acima de ${formatBRL(household.approvalThresholdCents)}` : "Sem limite combinado"} />
+          <Row href="/couple" title="Divisão das contas" detail={`${household.defaultSplit === "income" ? `Pela renda (${sharePercentLabel(people[0] === household.me ? household.myShare : 1 - household.myShare)})` : "50/50"}${equalIn.length ? ` · 50/50 em ${equalIn.join(", ")}` : ""}`} />
+          <Row href="/couple/goals" title="Metas" />
+        </Group>
+      ) : null}
 
-      <Link href="/settings/tags" className="flex min-h-14 items-center gap-3 rounded-2xl border border-border bg-card px-4">
-        <Tags aria-hidden="true" className="size-5 text-muted-foreground" />
-        <span className="flex-1 font-medium">Tags e regras automáticas</span>
-        <ChevronRight aria-hidden="true" className="size-5 text-muted-foreground" />
-      </Link>
+      <Group label="Bancos e registro">
+        <Row
+          href="/settings/connections"
+          title="Conexões (Open Finance)"
+          detail={banks.size ? `${banks.size} ${banks.size === 1 ? "banco" : "bancos"}${failing.length ? ` · ${failing.join(", ")} ${failing.length === 1 ? "precisa de atenção" : "precisam de atenção"}` : ""}` : "Nenhum banco conectado"}
+          alert={failing.length > 0}
+        />
+        <Row href="/settings/accounts" title="Contas manuais" detail={manual.length ? manual.slice(0, 2).map((a) => `${a.name}${a.balance_cents !== null ? ` · ${formatBRL(a.balance_cents)}` : ""}`).join(" · ") : "Carteira, dinheiro guardado…"} />
+        <Row href="/settings/whatsapp" title="WhatsApp" detail={link?.verified_at ? `Vinculado${link.phone_normalized && !link.chat_id?.endsWith("@lid") ? ` · ${link.phone_normalized}` : ""}` : "Registrar gastos e receber avisos"} />
+        <Row href="/settings/tags" title="Tags e regras de categoria" detail={partner ? "Valem para os dois" : undefined} />
+      </Group>
 
       <form action="/auth/signout" method="post">
-        <button type="submit" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl text-sm font-medium text-muted-foreground hover:bg-muted">
-          <LogOut aria-hidden="true" className="size-4" /> Sair
+        <button type="submit" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full text-[15px] font-medium text-muted-foreground hover:bg-muted">
+          <SignOutIcon className="size-4" /> Sair
         </button>
       </form>
     </div>

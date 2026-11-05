@@ -33,14 +33,15 @@ export async function signInAction(_: AuthState, formData: FormData): Promise<Au
 
 export async function signUpAction(_: AuthState, formData: FormData): Promise<AuthState> {
   const parsed = z
-    .object({ name: z.string().trim().min(1, "Informe seu nome").max(80), email, password })
-    .safeParse({ name: formData.get("name"), email: formData.get("email"), password: formData.get("password") });
+    .object({ name: z.string().trim().min(1, "Informe seu nome").max(80), email, password, invite: z.string().trim().max(12).optional() })
+    .safeParse({ name: formData.get("name"), email: formData.get("email"), password: formData.get("password"), invite: formData.get("invite") || undefined });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
-    options: { data: { display_name: parsed.data.name }, emailRedirectTo: `${await origin()}/auth/confirm?next=/overview` },
+    // The partner's invite code rides along; the first visit joins the household (see lib/auth/session.ts).
+    options: { data: { display_name: parsed.data.name, ...(parsed.data.invite ? { invite_code: parsed.data.invite.toUpperCase() } : {}) }, emailRedirectTo: `${await origin()}/auth/confirm?next=/overview` },
   });
   if (error) return { error: error.code === "weak_password" ? "Senha fraca. Use letras e números." : "Não foi possível criar a conta." };
   if (data.session) redirect("/overview");

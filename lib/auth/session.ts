@@ -6,7 +6,7 @@ import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-export type SessionUser = { id: string; email: string | null; name: string | null };
+export type SessionUser = { id: string; email: string | null; name: string | null; inviteCode: string | null };
 
 /** Verified identity for this request, or null. Uses JWT claim verification, never the raw cookie. */
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
@@ -19,6 +19,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     id: claims.sub,
     email: typeof claims.email === "string" ? claims.email : null,
     name: typeof meta.display_name === "string" ? meta.display_name : null,
+    inviteCode: typeof meta.invite_code === "string" ? meta.invite_code : null,
   };
 });
 
@@ -26,6 +27,19 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
 const ensureOnboarded = cache(async (user: SessionUser) => {
   const { error } = await createAdminClient().rpc("ensure_profile", { p_user: user.id, p_display_name: user.name });
   if (error) throw new Error(`Falha ao preparar o perfil: ${error.message}`);
+  // Signed up with the partner's invite: join their household once, then forget the code.
+  if (user.inviteCode) {
+    const { getHousehold, joinHousehold } = await import("@/lib/application/household");
+    const household = await getHousehold(user.id);
+    if (!household?.partner) {
+      try {
+        await joinHousehold(user.id, user.inviteCode);
+      } catch {
+        // Expired or used: the person can still join from Ajustes › Casal.
+      }
+      await createAdminClient().auth.admin.updateUserById(user.id, { user_metadata: { invite_code: null } });
+    }
+  }
 });
 
 /** For private pages and server actions: the verified user plus an RLS-scoped client for reads. */

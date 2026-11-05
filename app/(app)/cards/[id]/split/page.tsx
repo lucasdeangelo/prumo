@@ -54,9 +54,14 @@ export default async function SplitInvoicePage({ params, searchParams }: { param
       </header>
 
       <Card className="grid gap-3">
-        <div className="flex items-center justify-between text-sm">
-          <span>{dueIn >= 0 ? `Vence em ${dueIn} ${dueIn === 1 ? "dia" : "dias"}` : "Venceu"} · {formatDayLabel(invoice.period.due)}</span>
-          <span className="text-muted-foreground">{invoice.period.end >= todayIn() ? `Aberta · fecha ${formatDayShort(invoice.period.end)}` : "Fechada"}</span>
+        <div className="flex items-start justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-[15px] font-medium">{dueIn >= 0 ? `Vence em ${dueIn} ${dueIn === 1 ? "dia" : "dias"}` : "Venceu"}</span>
+            <span className="block text-[13px] capitalize text-muted-foreground">{formatDayLabel(invoice.period.due)}</span>
+          </span>
+          <span className="shrink-0 whitespace-nowrap rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground">
+            {invoice.period.end >= todayIn() ? `Aberta · fecha ${formatDayShort(invoice.period.end)}` : "Fechada"}
+          </span>
         </div>
         <span className="tabular text-[32px] font-medium tracking-[-0.03em]">{formatBRL(Math.max(0, invoice.settlement.totalCents))}</span>
         <SegmentBar

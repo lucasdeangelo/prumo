@@ -192,8 +192,8 @@ async function NossoHome({ userId, ctx, today, month, lowerMonth, historyStart }
     loadSharedPlans(ctx.memberIds),
   ]);
   const shared = [
-    ...ctx.accounts.filter((a) => a.user_id === userId && a.visibility !== "private").map((a) => ({ id: a.id, name: a.name, owner: household.me.name, visibility: a.visibility as "totals" | "details", balance: a.balance_cents })),
-    ...partnerView(household, ctx.accounts, ctx.facts, today).map((v) => ({ id: v.id, name: v.name, owner: partner.name, visibility: v.visibility, balance: v.balanceCents })),
+    ...ctx.accounts.filter((a) => a.user_id === userId && a.visibility !== "private").map((a) => ({ id: a.id, name: a.name, institution: a.institution, owner: household.me.name, visibility: a.visibility as "totals" | "details", balance: a.balance_cents })),
+    ...partnerView(household, ctx.accounts, ctx.facts, today).map((v) => ({ id: v.id, name: v.name, institution: ctx.accounts.find((a) => a.id === v.id)?.institution ?? null, owner: partner.name, visibility: v.visibility, balance: v.balanceCents })),
   ];
   const invoice = invoices.find((i) => i.items.length > 0) ?? invoices[0];
   const activeGoals = goals.filter((g) => g.status === "active").slice(0, 2);
@@ -241,7 +241,7 @@ async function NossoHome({ userId, ctx, today, month, lowerMonth, historyStart }
       {invoice ? (
         <Link href={`/cards?card=${invoice.card.id}`} className="block rounded-2xl border border-border bg-card p-5 text-foreground no-underline hover:text-foreground">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[15px] font-medium">Fatura {invoice.card.name}{invoice.card.card_last4 ? ` •• ${invoice.card.card_last4}` : ""}</span>
+            <span className="text-[15px] font-medium">Fatura {invoice.card.institution ?? invoice.card.name}{invoice.card.card_last4 ? ` •• ${invoice.card.card_last4}` : ""}</span>
             <Amount cents={Math.max(0, invoice.settlement.totalCents)} className="text-[15px]" />
           </div>
           <p className="text-[13px] text-muted-foreground">Vence {formatDayShort(invoice.period.due)}</p>
@@ -307,7 +307,7 @@ async function NossoHome({ userId, ctx, today, month, lowerMonth, historyStart }
             {shared.map((a) => (
               <li key={a.id}>
                 <Link href={`/accounts/${a.id}`} className="flex min-h-16 items-center gap-3 px-4 py-3 text-foreground no-underline hover:text-foreground">
-                <InstitutionMark name={a.name} />
+                <InstitutionMark name={a.institution ?? a.name} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[15px] font-medium">{a.name} · {a.owner}</span>
                   <span className="mt-1 block"><VisibilityBadge kind={a.visibility} /></span>

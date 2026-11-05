@@ -98,6 +98,7 @@ export type Subscription = {
   detection_confidence: number | null;
   notify_days_before: number;
   scope: "mine" | "ours";
+  user_id?: string;
 };
 
 export const TRANSACTION_COLUMNS =
@@ -105,7 +106,7 @@ export const TRANSACTION_COLUMNS =
 export const BILL_COLUMNS =
   "id, account_id, description, amount_cents, type, due_date, status, recurrence_type, recurrence_interval, recurrence_unit, tag_id, notify_days_before, matched_transaction_id, paid_at, scope";
 export const SUBSCRIPTION_COLUMNS =
-  "id, name, normalized_name, amount_cents, frequency, next_charge_date, account_id, tag_id, status, is_auto_detected, detection_confidence, notify_days_before, scope";
+  "id, name, normalized_name, amount_cents, frequency, next_charge_date, account_id, tag_id, status, is_auto_detected, detection_confidence, notify_days_before, scope, user_id";
 export const TAG_COLUMNS = "id, name, color, icon, is_default, excluded_from_totals";
 export const ACCOUNT_COLUMNS = "id, name, type, subtype, balance_cents, balance_synced_at, is_manual, pluggy_item_id, archived_at, visibility, institution, card_last4";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { Field, FormMessage, Input, SubmitButton } from "@/components/ui/form";
 
@@ -24,15 +24,24 @@ export function SignInForm({ next }: { next?: string }) {
   );
 }
 
-export function SignUpForm() {
+export function SignUpForm({ invite }: { invite?: string }) {
   const [state, action] = useActionState<AuthState, FormData>(signUpAction, undefined);
+  const [showInvite, setShowInvite] = useState(Boolean(invite));
   return (
     <form action={action} className="grid gap-4">
       <Field label="Nome"><Input name="name" autoComplete="given-name" required maxLength={80} /></Field>
       <Field label="E-mail"><Input type="email" name="email" autoComplete="email" required /></Field>
       <Field label="Senha" hint="Mínimo de 8 caracteres"><Input type="password" name="password" autoComplete="new-password" minLength={8} required /></Field>
+      {showInvite ? (
+        <Field label="Código do convite" hint="Você entra na casa do seu par no primeiro acesso.">
+          <Input name="invite" defaultValue={invite} placeholder="ABCD-1234" autoCapitalize="characters" autoComplete="off" />
+        </Field>
+      ) : null}
       <FormMessage state={state} />
       <SubmitButton className="w-full" pendingText="Criando…">Criar conta</SubmitButton>
+      {!showInvite ? (
+        <button type="button" onClick={() => setShowInvite(true)} className="min-h-11 text-sm font-medium text-primary">Recebi um convite do meu par</button>
+      ) : null}
       <p className="text-center text-sm text-muted-foreground">Já tem conta? <Link href="/login" className="font-medium text-primary">Entrar</Link></p>
     </form>
   );

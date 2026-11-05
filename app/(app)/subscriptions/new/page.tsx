@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/app/bits";
 import { SubscriptionForm } from "@/components/app/forms";
 import { Card } from "@/components/ui/card";
+import { getHousehold } from "@/lib/application/household";
 import { requireUser } from "@/lib/auth/session";
 import { todayIn } from "@/lib/domain/dates";
 import { listTags } from "@/lib/repositories/reads";
@@ -13,7 +14,7 @@ export default async function NewSubscriptionPage() {
   return (
     <div>
       <PageHeader title="Nova assinatura" back="/subscriptions" />
-      <Card><SubscriptionForm tags={tags} today={todayIn()} /></Card>
+      <Card><SubscriptionForm tags={tags} today={todayIn()} partnerName={(await getHousehold(user.id))?.partner?.name ?? null} /></Card>
     </div>
   );
 }

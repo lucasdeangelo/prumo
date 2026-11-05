@@ -6,6 +6,17 @@ Monolito Next.js 16 (App Router) + Tailwind 4 + Supabase (Postgres, Auth, RLS). 
 
 Veja também: [arquitetura](ARCHITECTURE.md), [modelo de dados](DATA_MODEL.md), [segurança](SECURITY_MODEL.md), [plano](IMPLEMENTATION_PLAN.md) e o [relatório das fases 3–15](docs/phases/PHASE_3_15_REPORT.md).
 
+## Finanças a dois (Meu, Seu, Nosso)
+
+O Prumo é feito para casais. Cada pessoa tem o próprio espaço (**Meu**) e o casal tem um espaço comum (**Nosso**), alternados pelo seletor no topo. Cada um conecta os próprios bancos e escolhe, conta por conta, o que o par vê (só eu / só totais / com detalhes). Contas novas começam como "Só eu vejo".
+
+- **Privacidade:** por lançamento (tudo, só categoria e valor, ocultar), modo surpresa até uma data, regras automáticas e a prévia "Como seu par vê". Mudanças não avisam o par.
+- **Fatura compartilhada:** cada compra é Nosso, de um ou do outro; marcação em lote com rateio (50/50, pela renda, fixo) e acerto com Pix copia e cola.
+- **Orçamento do lar** com avisos em 80% e 100%, **metas** com aportes e marcos, **combinados** para compras grandes, **dinheiro livre** e **retrospectiva** mensal sem placar.
+- Convite: Ajustes › Perfil do casal gera um código; o par usa em Criar conta › "Recebi um convite do meu par".
+
+Detalhes em [docs/phases/COUPLE_REPORT.md](docs/phases/COUPLE_REPORT.md).
+
 ## O que tem
 
 | Tela | O que faz |

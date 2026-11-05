@@ -22,6 +22,7 @@ Phases 3–15 were delivered together on 2026-11-04 (see [PHASE_3_15_REPORT.md](
 - [~] Phase 13 — WhatsApp Worker (bridge and conversation tested; not run against a real WhatsApp session)
 - [x] Phase 14 — WhatsApp Agent
 - [x] Phase 15 — Notifications
+- [x] Couple — households, Meu/Nosso, visibility, privacy, guided Open Finance, cards and shared invoice, budget, goals, combinados, free money, look back ([COUPLE_REPORT.md](docs/phases/COUPLE_REPORT.md))
 - [ ] Phase 16 — Hardening
 - [ ] Phase 17 — Deploy
 
