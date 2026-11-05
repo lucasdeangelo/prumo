@@ -4,22 +4,24 @@ The repository starts from a Create Next App template. Build one phase per execu
 
 ## Checklist
 
+Phases 3–15 were delivered together on 2026-11-04 (see [PHASE_3_15_REPORT.md](docs/phases/PHASE_3_15_REPORT.md)). `[x]` means code and automated gates pass; `[~]` means code is in place but a gate needs an external environment that was not available.
+
 - [x] Phase 0 — Discovery
 - [x] Phase 1 — Foundation
 - [x] Phase 2 — Database + RLS
-- [ ] Phase 3 — Auth
-- [ ] Phase 4 — Transactions
-- [ ] Phase 5 — Accounts
-- [ ] Phase 6 — Dashboard
-- [ ] Phase 7 — Monthly
-- [ ] Phase 8 — Upcoming
-- [ ] Phase 9 — Subscriptions
-- [ ] Phase 10 — Pluggy
-- [ ] Phase 11 — Reconciliation
-- [ ] Phase 12 — Categorization
-- [ ] Phase 13 — WhatsApp Worker
-- [ ] Phase 14 — WhatsApp Agent
-- [ ] Phase 15 — Notifications
+- [x] Phase 3 — Auth
+- [x] Phase 4 — Transactions
+- [x] Phase 5 — Accounts
+- [x] Phase 6 — Dashboard
+- [x] Phase 7 — Monthly
+- [x] Phase 8 — Upcoming
+- [x] Phase 9 — Subscriptions
+- [~] Phase 10 — Pluggy (contract checked against official docs; no sandbox credentials to run it live)
+- [x] Phase 11 — Reconciliation
+- [x] Phase 12 — Categorization (deterministic; AI only parses WhatsApp text)
+- [~] Phase 13 — WhatsApp Worker (bridge and conversation tested; not run against a real WhatsApp session)
+- [x] Phase 14 — WhatsApp Agent
+- [x] Phase 15 — Notifications
 - [ ] Phase 16 — Hardening
 - [ ] Phase 17 — Deploy
 

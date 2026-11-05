@@ -58,3 +58,9 @@ At minimum: `transactions(user_id, transaction_date DESC)`, account/date and tag
 ## Financial state transitions
 
 `markUpcomingBillAsPaid` locks the bill, returns the existing result when already paid, searches compatible facts, links one if appropriate, otherwise creates one manual fact, then records audit in the same transaction. Reconciliation locks both sides and uses a unique relation to make repeated runs converge. Subscription recurrence generation uses a stable key such as subscription ID plus scheduled due date. A cancelled subscription stops future forecasts but leaves existing facts/history. Precise recurrence semantics, month-end anchoring, and configurable matching thresholds are specified and tested in their implementation phases.
+
+## Migration 202611040001 — app write paths (2026-11-04)
+
+Adds `tags.excluded_from_totals` (transfers/investments stay out of income and spending), nullable `whatsapp_links.phone_normalized` for pending codes (verified links must have a phone; pending code hashes are unique), unique `subscriptions(user_id, normalized_name)` so detection never re-suggests a name, and `upcoming_bills.parent_bill_id` (same-user FK, unique) so a recurring bill has at most one successor. Routines: `ensure_profile`, `next_due_date`, `mark_bill_paid`, `upsert_provider_transactions`, `claim_notifications`, plus audit and provider-fact triggers. `tests/database/app_write_paths.sql` checks onboarding idempotency, double payment, cross-tenant payment, provider replay, user-tag preservation, provider immutability and outbox leasing.
+
+Forecasts (predicted bill repetitions and subscription charges) are computed in `lib/domain/forecast.ts` and never stored.
