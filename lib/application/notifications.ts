@@ -4,6 +4,8 @@ import { addDays, formatDayShort, todayIn } from "@/lib/domain/dates";
 import { formatBRL } from "@/lib/domain/money";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { checkBudgetAlerts } from "./plans";
+
 type Pending = { user_id: string; type: string; dedupe_key: string; text: string };
 
 /**
@@ -22,10 +24,22 @@ export async function enqueueDueNotifications(now = new Date()) {
   if (users.length === 0) return { queued: 0 };
 
   const pending: Pending[] = [];
+  // Shared ("Nosso") bills and subscriptions remind both people, even when only one has WhatsApp linked.
+  const linked = new Set(users);
+  const { data: memberships } = await admin.from("household_members").select("household_id, user_id");
+  const partnerOf = new Map<string, string>();
+  for (const m of memberships ?? []) {
+    const other = (memberships ?? []).find((x) => x.household_id === m.household_id && x.user_id !== m.user_id);
+    if (other) partnerOf.set(m.user_id as string, other.user_id as string);
+  }
+  const owners = [...new Set([...users, ...users.map((u) => partnerOf.get(u)).filter(Boolean) as string[]])];
+  const recipients = (owner: string, scope: string | null) =>
+    [owner, scope === "ours" ? partnerOf.get(owner) : undefined].filter((u): u is string => Boolean(u) && linked.has(u as string));
+
   const { data: bills } = await admin
     .from("upcoming_bills")
-    .select("id, user_id, description, amount_cents, type, due_date, notify_days_before")
-    .in("user_id", users)
+    .select("id, user_id, description, amount_cents, type, due_date, notify_days_before, scope")
+    .in("user_id", owners)
     .in("status", ["pending", "overdue"])
     .is("deleted_at", null)
     .gte("due_date", addDays(today, -1))
@@ -33,30 +47,35 @@ export async function enqueueDueNotifications(now = new Date()) {
   for (const bill of bills ?? []) {
     const verb = bill.type === "payable" ? "pagar" : "receber";
     const amount = formatBRL(bill.amount_cents as number);
-    if (bill.due_date === addDays(today, -1)) {
-      pending.push({ user_id: bill.user_id, type: "bill_due", dedupe_key: `bill_overdue:${bill.id}:${bill.due_date}`, text: `⚠️ *${bill.description}* (${amount}) venceu ontem e ainda está em aberto.\nJá pagou? Marque no app ou responda *paguei ${bill.description}*.` });
-    } else if (bill.due_date >= today && bill.due_date <= addDays(today, bill.notify_days_before as number)) {
-      const when = bill.due_date === today ? "vence *hoje*" : `vence em ${formatDayShort(bill.due_date as string)}`;
-      pending.push({ user_id: bill.user_id, type: "bill_due", dedupe_key: `bill_due:${bill.id}:${bill.due_date}`, text: `🔔 Conta a ${verb}: *${bill.description}* — ${amount}, ${when}.` });
+    const shared = bill.scope === "ours" ? " (conta do casal)" : "";
+    for (const userId of recipients(bill.user_id as string, bill.scope as string)) {
+      if (bill.due_date === addDays(today, -1)) {
+        pending.push({ user_id: userId, type: "bill_due", dedupe_key: `bill_overdue:${bill.id}:${bill.due_date}`, text: `⚠️ *${bill.description}*${shared} (${amount}) venceu ontem e ainda está em aberto.\nJá pagou? Marque no app ou responda *paguei ${bill.description}*.` });
+      } else if (bill.due_date >= today && bill.due_date <= addDays(today, bill.notify_days_before as number)) {
+        const when = bill.due_date === today ? "vence *hoje*" : `vence em ${formatDayShort(bill.due_date as string)}`;
+        pending.push({ user_id: userId, type: "bill_due", dedupe_key: `bill_due:${bill.id}:${bill.due_date}`, text: `🔔 Conta a ${verb}${shared}: *${bill.description}* — ${amount}, ${when}.` });
+      }
     }
   }
 
   const { data: subs } = await admin
     .from("subscriptions")
-    .select("id, user_id, name, amount_cents, next_charge_date, notify_days_before")
-    .in("user_id", users)
+    .select("id, user_id, name, amount_cents, next_charge_date, notify_days_before, scope")
+    .in("user_id", owners)
     .eq("status", "active")
     .is("deleted_at", null)
     .gte("next_charge_date", today)
     .lte("next_charge_date", addDays(today, 30));
   for (const sub of subs ?? []) {
     if ((sub.next_charge_date as string) > addDays(today, sub.notify_days_before as number)) continue;
-    pending.push({
-      user_id: sub.user_id,
-      type: "subscription_charge",
-      dedupe_key: `sub:${sub.id}:${sub.next_charge_date}`,
-      text: `🔁 Assinatura *${sub.name}* deve cobrar ${formatBRL(sub.amount_cents as number)} em ${formatDayShort(sub.next_charge_date as string)}.`,
-    });
+    for (const userId of recipients(sub.user_id as string, sub.scope as string)) {
+      pending.push({
+        user_id: userId,
+        type: "subscription_charge",
+        dedupe_key: `sub:${sub.id}:${sub.next_charge_date}`,
+        text: `🔁 Assinatura${sub.scope === "ours" ? " do casal" : ""} *${sub.name}* deve cobrar ${formatBRL(sub.amount_cents as number)} em ${formatDayShort(sub.next_charge_date as string)}.`,
+      });
+    }
   }
 
   let queued = 0;
@@ -71,6 +90,11 @@ export async function enqueueDueNotifications(now = new Date()) {
     });
     if (!error) queued += 1;
     else if (error.code !== "23505") throw new Error(`Falha ao enfileirar aviso: ${error.message}`);
+  }
+  // Household budget alerts (80/100%), one per category and month.
+  const { data: budgeted } = await admin.from("household_budgets").select("household_id");
+  for (const householdId of new Set((budgeted ?? []).map((b) => b.household_id as string))) {
+    queued += await checkBudgetAlerts(householdId);
   }
   return { queued };
 }
