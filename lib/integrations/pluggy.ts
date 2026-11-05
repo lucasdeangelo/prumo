@@ -53,6 +53,8 @@ export type PluggyItemResponse = {
   connector?: { id: number; name: string } | null;
   error?: { code?: string; message?: string } | null;
   clientUserId?: string | null;
+  consentExpiresAt?: string | null;
+  lastUpdatedAt?: string | null;
 };
 
 // The API key lives 2 hours; refresh a little earlier.

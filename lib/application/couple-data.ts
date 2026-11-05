@@ -121,7 +121,7 @@ export function shareFor(fact: FactRow, household: Household, rules: Map<string,
 
 export async function loadSplitRules(householdId: string) {
   const { data } = await createAdminClient().from("split_rules").select("category, method, fixed_share").eq("household_id", householdId);
-  return new Map((data ?? []).map((r) => [r.category as string, { method: r.method as SplitMethod, fixedShare: (r.fixed_share as number | null) ?? null }]));
+  return new Map<string, { method: SplitMethod; fixedShare: number | null }>((data ?? []).map((r) => [r.category as string, { method: r.method as SplitMethod, fixedShare: (r.fixed_share as number | null) ?? null }]));
 }
 
 export async function loadBudgets(householdId: string) {

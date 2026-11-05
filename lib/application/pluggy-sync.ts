@@ -9,6 +9,7 @@ import { listRules, listTags } from "@/lib/repositories/reads";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { autoReconcileBills } from "./bills";
+import { applyAutoOurs } from "./cards";
 import { applyRulesToRecent } from "./privacy";
 import { runSubscriptionDetection } from "./subscriptions";
 
@@ -16,7 +17,7 @@ const INITIAL_DAYS = 365;
 const OVERLAP_DAYS = 10;
 
 /** Saves a connection created by the widget. The item must belong to this user (clientUserId). */
-export async function registerItem(userId: string, pluggyItemId: string) {
+async function ensureItemRow(userId: string, pluggyItemId: string) {
   const item = await pluggy.getItem(pluggyItemId);
   if (item.clientUserId && item.clientUserId !== userId) throw new pluggy.PluggyError("Conexão de outro usuário.", 403);
   const admin = createAdminClient();
@@ -29,41 +30,37 @@ export async function registerItem(userId: string, pluggyItemId: string) {
       connector_id: item.connector ? String(item.connector.id) : null,
       institution_name: item.connector?.name ?? null,
       status: item.status,
+      consent_expires_at: item.consentExpiresAt ?? null,
+      execution_status: item.executionStatus ?? null,
     });
     if (error && error.code !== "23505") throw new Error(`Falha ao salvar conexão: ${error.message}`);
   }
-  return syncItem(userId, pluggyItemId);
+  const { data: row } = await admin.from("pluggy_items").select("id, last_sync_at").eq("user_id", userId).eq("pluggy_item_id", pluggyItemId).is("deleted_at", null).single();
+  return { item, row: row as { id: string; last_sync_at: string | null } };
 }
 
 /**
- * Pulls accounts and posted transactions for one item. Replays converge thanks to the
- * provider identity index; user-chosen tags are preserved by upsert_provider_transactions.
+ * Step 6 of the connection flow: brings the account list (no history yet) so the person chooses
+ * what to bring and who sees each one. New accounts start private ("Só eu vejo").
  */
-export async function syncItem(userId: string, pluggyItemId: string) {
-  const admin = createAdminClient();
-  const { data: row } = await admin
-    .from("pluggy_items")
-    .select("id, last_sync_at")
-    .eq("user_id", userId)
-    .eq("pluggy_item_id", pluggyItemId)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (!row) throw new pluggy.PluggyError("Conexão não encontrada.", 404);
-
-  const item = await pluggy.getItem(pluggyItemId);
-  await admin
-    .from("pluggy_items")
-    .update({ status: item.status, error_code: item.error?.code ?? null, institution_name: item.connector?.name ?? undefined })
-    .eq("user_id", userId)
-    .eq("id", row.id);
-
+export async function stageConnection(userId: string, pluggyItemId: string) {
+  const { item, row } = await ensureItemRow(userId, pluggyItemId);
   const accounts = await pluggy.listAccounts(pluggyItemId);
-  const syncStartedAt = new Date().toISOString();
-  const [rules, tags] = await Promise.all([listRules(admin, userId), listTags(admin, userId)]);
-  const today = todayIn();
-  const from = row.last_sync_at ? addDays(instantToDate(row.last_sync_at as string), -OVERLAP_DAYS) : addDays(today, -INITIAL_DAYS);
-  let imported = 0;
+  await upsertAccounts(userId, row.id, item, accounts);
+  return { itemId: pluggyItemId, status: item.status, executionStatus: item.executionStatus ?? null, accountCount: accounts.length };
+}
 
+/** Kept for the older entry point: connect and import right away. */
+export async function registerItem(userId: string, pluggyItemId: string) {
+  await ensureItemRow(userId, pluggyItemId);
+  return syncItem(userId, pluggyItemId);
+}
+
+type LocalAccount = { id: string; pluggyAccountId: string; importEnabled: boolean; partnerCard: string | null };
+
+async function upsertAccounts(userId: string, rowId: string, item: pluggy.PluggyItemResponse, accounts: pluggy.PluggyAccount[]) {
+  const admin = createAdminClient();
+  const result: LocalAccount[] = [];
   for (const account of accounts) {
     const balance = account.balance === null || account.balance === undefined ? null : decimalToCents(account.balance);
     const fields = {
@@ -85,25 +82,74 @@ export async function syncItem(userId: string, pluggyItemId: string) {
       .from("accounts")
       .select("id, import_enabled, partner_card_last4")
       .eq("user_id", userId)
-      .eq("pluggy_item_id", row.id)
+      .eq("pluggy_item_id", rowId)
       .eq("pluggy_account_id", account.id)
       .maybeSingle();
-    let accountId = local?.id as string | undefined;
-    if (accountId) {
-      await admin.from("accounts").update(fields).eq("user_id", userId).eq("id", accountId);
+    if (local) {
+      await admin.from("accounts").update({ ...fields, archived_at: null }).eq("user_id", userId).eq("id", local.id);
+      result.push({ id: local.id as string, pluggyAccountId: account.id, importEnabled: local.import_enabled as boolean, partnerCard: (local.partner_card_last4 as string | null) ?? null });
     } else {
       const { data: created, error } = await admin
         .from("accounts")
-        .insert({ ...fields, user_id: userId, pluggy_item_id: row.id, pluggy_account_id: account.id, is_manual: false })
+        .insert({ ...fields, user_id: userId, pluggy_item_id: rowId, pluggy_account_id: account.id, is_manual: false })
         .select("id")
         .single();
       if (error) throw new Error(`Falha ao salvar conta bancária: ${error.message}`);
-      accountId = created.id as string;
+      result.push({ id: created.id as string, pluggyAccountId: account.id, importEnabled: true, partnerCard: null });
     }
-    // The person chose not to bring this account (design: "não importar").
-    if (local && local.import_enabled === false) continue;
-    const partnerCard = (local?.partner_card_last4 as string | null | undefined) ?? null;
+  }
+  return result;
+}
 
+/**
+ * Pulls accounts and posted transactions for one item. Replays converge thanks to the
+ * provider identity index; user-chosen tags are preserved by upsert_provider_transactions.
+ */
+export async function syncItem(userId: string, pluggyItemId: string) {
+  const admin = createAdminClient();
+  const { data: row } = await admin
+    .from("pluggy_items")
+    .select("id, last_sync_at, history")
+    .eq("user_id", userId)
+    .eq("pluggy_item_id", pluggyItemId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!row) throw new pluggy.PluggyError("Conexão não encontrada.", 404);
+
+  const item = await pluggy.getItem(pluggyItemId);
+  const attemptAt = new Date().toISOString();
+  const healthy = item.status === "UPDATED" && !item.error;
+  const history = [{ at: item.lastUpdatedAt ?? attemptAt, ok: healthy }, ...((row.history as Array<{ at: string; ok: boolean }>) ?? [])]
+    .filter((h, i, all) => all.findIndex((x) => x.at.slice(0, 10) === h.at.slice(0, 10)) === i)
+    .slice(0, 10);
+  await admin
+    .from("pluggy_items")
+    .update({
+      status: item.status,
+      error_code: item.error?.code ?? null,
+      execution_status: item.executionStatus ?? null,
+      consent_expires_at: item.consentExpiresAt ?? null,
+      last_attempt_at: attemptAt,
+      ...(healthy ? { last_success_at: item.lastUpdatedAt ?? attemptAt } : {}),
+      history,
+      institution_name: item.connector?.name ?? undefined,
+    })
+    .eq("user_id", userId)
+    .eq("id", row.id);
+
+  const accounts = await pluggy.listAccounts(pluggyItemId);
+  const locals = await upsertAccounts(userId, row.id as string, item, accounts);
+  const syncStartedAt = new Date().toISOString();
+  const [rules, tags] = await Promise.all([listRules(admin, userId), listTags(admin, userId)]);
+  const today = todayIn();
+  const from = row.last_sync_at ? addDays(instantToDate(row.last_sync_at as string), -OVERLAP_DAYS) : addDays(today, -INITIAL_DAYS);
+  let imported = 0;
+  const perAccount: Array<{ accountId: string; imported: number }> = [];
+
+  for (const account of accounts) {
+    const local = locals.find((l) => l.pluggyAccountId === account.id)!;
+    // The person chose not to bring this account (design: "não importar").
+    if (!local.importEnabled) continue;
     const txs = await pluggy.listTransactions(account.id, from, addDays(today, 1));
     // Pending items may be re-issued with another id once posted; import only posted facts.
     const rows = txs
@@ -116,7 +162,7 @@ export async function syncItem(userId: string, pluggyItemId: string) {
         const category = categorize({ description, merchant, type, providerCategory: tx.category }, rules, tags);
         const cardLast4 = lastFour(tx.creditCardMetadata?.cardNumber);
         return {
-          account_id: accountId,
+          account_id: local.id,
           pluggy_transaction_id: tx.id,
           provider_reference_scope: `pluggy:${account.id}`,
           amount_cents: Math.abs(decimalToCents(tx.amount)),
@@ -133,7 +179,7 @@ export async function syncItem(userId: string, pluggyItemId: string) {
           installment_number: tx.creditCardMetadata?.installmentNumber ?? null,
           installment_total: tx.creditCardMetadata?.totalInstallments ?? null,
           // A purchase on the partner's additional card is theirs from the start.
-          scope: partnerCard && cardLast4 === partnerCard ? "partner" : "mine",
+          scope: local.partnerCard && cardLast4 === local.partnerCard ? "partner" : "mine",
         };
       })
       .filter((tx) => tx.amount_cents > 0);
@@ -143,13 +189,15 @@ export async function syncItem(userId: string, pluggyItemId: string) {
       if (error) throw new Error(`Falha ao importar movimentações: ${error.message}`);
       imported += Number(data ?? 0);
     }
+    perAccount.push({ accountId: local.id, imported: rows.length });
   }
 
   await admin.from("pluggy_items").update({ last_sync_at: new Date().toISOString() }).eq("user_id", userId).eq("id", row.id);
   await applyRulesToRecent(userId, from, syncStartedAt);
+  await applyAutoOurs(userId, syncStartedAt);
   await runSubscriptionDetection(userId);
   const { settled } = await autoReconcileBills(userId);
-  return { accounts: accounts.length, imported, settled, status: item.status };
+  return { accounts: accounts.length, imported, settled, status: item.status, executionStatus: item.executionStatus ?? null, perAccount };
 }
 
 const SETTLED_STATUSES = new Set(["UPDATED", "LOGIN_ERROR", "OUTDATED", "WAITING_USER_INPUT"]);
@@ -196,7 +244,11 @@ export async function syncFromWebhook(pluggyItemId: string) {
   for (const row of data ?? []) await syncItem(row.user_id as string, pluggyItemId);
 }
 
-export async function disconnectItem(userId: string, pluggyItemId: string) {
+/**
+ * Stops receiving data. "Manter" keeps history (accounts archived); "Apagar" also hides its facts
+ * from every screen, while goals and past settle-ups stay as they are.
+ */
+export async function disconnectItem(userId: string, pluggyItemId: string, options: { purge?: boolean } = {}) {
   const admin = createAdminClient();
   const { data: row } = await admin.from("pluggy_items").select("id").eq("user_id", userId).eq("pluggy_item_id", pluggyItemId).is("deleted_at", null).maybeSingle();
   if (!row) return;
@@ -208,6 +260,11 @@ export async function disconnectItem(userId: string, pluggyItemId: string) {
   const now = new Date().toISOString();
   // History stays: accounts are archived, transactions keep their rows.
   await admin.from("accounts").update({ archived_at: now }).eq("user_id", userId).eq("pluggy_item_id", row.id);
+  if (options.purge) {
+    const { data: accounts } = await admin.from("accounts").select("id").eq("user_id", userId).eq("pluggy_item_id", row.id);
+    const ids = (accounts ?? []).map((a) => a.id as string);
+    if (ids.length) await admin.from("transactions").update({ deleted_at: now }).eq("user_id", userId).in("account_id", ids).is("deleted_at", null);
+  }
   await admin.from("pluggy_items").update({ deleted_at: now, status: "DELETED" }).eq("user_id", userId).eq("id", row.id);
 }
 
