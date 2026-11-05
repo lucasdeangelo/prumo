@@ -1,8 +1,7 @@
-import { Plus, Sparkles } from "lucide-react";
-import Link from "next/link";
 
 import { subscriptionStatusAction } from "@/app/(app)/actions";
-import { Amount, PageHeader, StatTile, StateBadge } from "@/components/app/bits";
+import { Amount, IconLink, PageHeader, StatTile, StateBadge } from "@/components/app/bits";
+import { PlusIcon, SparkIcon } from "@/components/app/icons";
 import { DetectButton } from "@/components/app/forms";
 import { Card, EmptyState } from "@/components/ui/card";
 import { SubmitButton } from "@/components/ui/form";
@@ -56,7 +55,7 @@ export default async function SubscriptionsPage() {
     <div className="grid gap-4">
       <PageHeader
         title="Assinaturas"
-        action={<Link href="/subscriptions/new" aria-label="Nova assinatura" className="flex size-11 items-center justify-center rounded-xl bg-secondary text-secondary-foreground"><Plus aria-hidden="true" className="size-5" /></Link>}
+        action={<IconLink href="/subscriptions/new" label="Nova assinatura" tone="tint"><PlusIcon className="size-5" strokeWidth={1.8} /></IconLink>}
       />
       <div className="grid grid-cols-2 gap-3">
         <StatTile label="Por mês" cents={monthly} tone="out" />
@@ -65,7 +64,7 @@ export default async function SubscriptionsPage() {
 
       {candidates.length > 0 ? (
         <section className="grid gap-2">
-          <h2 className="flex items-center gap-1.5 px-1 text-sm font-semibold"><Sparkles aria-hidden="true" className="size-4" /> Parecem assinaturas</h2>
+          <h2 className="flex items-center gap-1.5 px-1 text-sm font-semibold"><SparkIcon className="size-4" /> Parecem assinaturas</h2>
           <Card className="p-0">
             <ul className="divide-y divide-border">
               {candidates.map((sub) => (

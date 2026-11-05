@@ -11,7 +11,7 @@ function TooltipCard({ active, payload }: TooltipContentProps<ValueType, NameTyp
   if (!active || !payload?.length) return null;
   const point = payload[0].payload as CumulativePoint;
   return (
-    <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs shadow-lg">
+    <div className="rounded-[10px] border border-border bg-card px-3 py-2 text-xs shadow-[0_8px_24px_rgba(18,21,18,0.08)]">
       <p className="mb-1 font-semibold">Dia {point.day}</p>
       {point.expenseCents !== null ? <p>Este mês <span className="tabular pl-3 font-medium">{formatBRL(point.expenseCents)}</span></p> : null}
       {point.previousCents !== null ? <p className="text-muted-foreground">Mês anterior <span className="tabular pl-3">{formatBRL(point.previousCents)}</span></p> : null}

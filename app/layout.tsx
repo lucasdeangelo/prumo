@@ -1,13 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Geist } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 
 import "./globals.css";
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
+// Design system: Geist for interface and text (400/500/600), Geist Mono for labels and dates.
+const geist = Geist({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-geist" });
+const geistMono = Geist_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-geist-mono" });
 
 export const metadata: Metadata = {
   title: "Prumo — finanças com clareza",
-  description: "Uma base segura para organizar suas finanças pessoais.",
+  description: "Finanças a dois, no prumo.",
   applicationName: "Prumo",
   icons: { icon: "/icon.svg" },
 };
@@ -15,15 +17,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f6f8f5" },
-    { media: "(prefers-color-scheme: dark)", color: "#101917" },
-  ],
+  themeColor: "#f5f6f3",
+  colorScheme: "light",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="pt-BR" className={geist.variable}>
+    <html lang="pt-BR" className={`${geist.variable} ${geistMono.variable}`}>
       <body className="min-h-svh antialiased">{children}</body>
     </html>
   );

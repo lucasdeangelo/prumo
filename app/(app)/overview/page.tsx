@@ -1,7 +1,7 @@
-import { AlertTriangle, ArrowRight, Sparkles } from "lucide-react";
 import Link from "next/link";
 
-import { Amount, PageHeader, StatTile, StateBadge } from "@/components/app/bits";
+import { Amount, PageHeader, SectionHeader, StatTile, StateBadge } from "@/components/app/bits";
+import { ChevronRightIcon, SparkIcon } from "@/components/app/icons";
 import { TransactionList } from "@/components/app/transaction-list";
 import { CategoryBars } from "@/components/charts/category-bars";
 import { IncomeExpenseBars } from "@/components/charts/income-expense-bars";
@@ -56,10 +56,10 @@ export default async function OverviewPage() {
     <div className="grid gap-4">
       <PageHeader title={`Olá${user.name ? `, ${user.name.split(" ")[0]}` : ""}`} subtitle={formatMonthLong(month)} />
 
-      <Card className="bg-primary text-primary-foreground">
-        <p className="text-sm opacity-85">Resultado do mês</p>
-        <p className="tabular mt-1 text-4xl font-semibold tracking-tight">{formatBRL(summary.netCents)}</p>
-        <p className="mt-2 text-sm opacity-85">
+      <Card className="flex flex-col gap-2 border-0 bg-primary p-6 text-primary-foreground">
+        <p className="label-mono text-[#cfe0d8]">Resultado do mês</p>
+        <p className="tabular text-[40px] font-medium leading-[1.05] tracking-[-0.03em]">{formatBRL(summary.netCents)}</p>
+        <p className="text-sm text-[#cfe0d8]">
           {withBalance.length > 0 ? <>Saldo informado pelos bancos: <span className="tabular font-medium">{formatBRL(balance)}</span></> : "Conecte um banco em Ajustes para ver o saldo."}
         </p>
       </Card>
@@ -70,18 +70,18 @@ export default async function OverviewPage() {
       </div>
 
       {overdue.length > 0 ? (
-        <Link href="/upcoming" className="flex items-center gap-3 rounded-2xl bg-danger/10 p-3 text-sm text-danger">
-          <AlertTriangle aria-hidden="true" className="size-5 shrink-0" />
+        <Link href="/upcoming" className="flex min-h-12 items-center gap-3 rounded-2xl bg-danger-bg px-4 py-3 text-sm font-medium text-danger hover:text-danger">
+          <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-danger" />
           <span className="flex-1">{overdue.length} conta(s) vencida(s): {formatBRL(forecastTotals(overdue).outCents)}</span>
-          <ArrowRight aria-hidden="true" className="size-4" />
+          <ChevronRightIcon className="size-4" strokeWidth={1.8} />
         </Link>
       ) : null}
 
       {candidates.length > 0 ? (
-        <Link href="/subscriptions" className="flex items-center gap-3 rounded-2xl bg-warning-bg p-3 text-sm text-warning-fg">
-          <Sparkles aria-hidden="true" className="size-5 shrink-0" />
+        <Link href="/subscriptions" className="flex min-h-12 items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground hover:text-foreground">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-warning-bg text-warning-fg"><SparkIcon className="size-4" /></span>
           <span className="flex-1">Encontramos {candidates.length} possível(is) assinatura(s). Confirme?</span>
-          <ArrowRight aria-hidden="true" className="size-4" />
+          <ChevronRightIcon className="size-4 text-muted-foreground" strokeWidth={1.8} />
         </Link>
       ) : null}
 
@@ -91,13 +91,13 @@ export default async function OverviewPage() {
       </Card>
 
       <Card>
-        <CardTitle action={<Link href={`/monthly/${month}`} className="text-sm font-medium text-primary">Ver mês</Link>}>Gastos por tag</CardTitle>
+        <CardTitle action={<Link href={`/monthly/${month}`} className="text-sm font-medium">Ver mês</Link>}>Gastos por tag</CardTitle>
         {categoryRows.length > 0 ? <CategoryBars rows={categoryRows} totalCents={summary.expenseCents} /> : <EmptyState title="Sem gastos neste mês ainda" />}
         {untagged > 0 ? <p className="mt-3 text-xs text-muted-foreground">{untagged} movimentação(ões) sem tag.</p> : null}
       </Card>
 
       <Card>
-        <CardTitle action={<Link href="/upcoming" className="text-sm font-medium text-primary">Todas</Link>}>Próximos 14 dias</CardTitle>
+        <CardTitle action={<Link href="/upcoming" className="text-sm font-medium">Todas</Link>}>Próximos 14 dias</CardTitle>
         {nextItems.length > 0 ? (
           <ul className="grid gap-2.5">
             {nextItems.map((item) => (
@@ -110,16 +110,13 @@ export default async function OverviewPage() {
             ))}
           </ul>
         ) : (
-          <EmptyState title="Nada previsto">Cadastre contas em Futuras.</EmptyState>
+          <EmptyState title="Nada previsto"><Link href="/upcoming/new">Cadastre uma conta futura</Link>.</EmptyState>
         )}
         {monthlySubs > 0 ? <p className="mt-3 text-xs text-muted-foreground">Assinaturas ativas custam {formatBRL(monthlySubs)} por mês.</p> : null}
       </Card>
 
       <section className="grid gap-2">
-        <div className="flex items-center justify-between px-1">
-          <h2 className="text-base font-semibold">Recentes</h2>
-          <Link href={`/monthly/${month}`} className="text-sm font-medium text-primary">Ver tudo</Link>
-        </div>
+        <SectionHeader title="Recentes" action={<Link href={`/monthly/${month}`} className="flex min-h-11 items-center text-sm font-medium">Ver tudo</Link>} />
         {recent.length > 0 ? <TransactionList transactions={recent} tags={tags} grouped={false} /> : (
           <EmptyState title="Nenhuma movimentação">Toque em + para registrar, conecte um banco ou mande uma mensagem no WhatsApp.</EmptyState>
         )}

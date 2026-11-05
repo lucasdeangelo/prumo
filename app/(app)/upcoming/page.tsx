@@ -1,7 +1,7 @@
-import { Plus, Repeat } from "lucide-react";
 import Link from "next/link";
 
-import { Amount, PageHeader, StatTile, StateBadge } from "@/components/app/bits";
+import { Amount, IconLink, PageHeader, StatTile, StateBadge } from "@/components/app/bits";
+import { PlusIcon, RepeatIcon } from "@/components/app/icons";
 import { Card, EmptyState } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
 import { addDays, formatDayLabel, formatMonthLong, monthOf, todayIn } from "@/lib/domain/dates";
@@ -32,11 +32,12 @@ export default async function UpcomingPage({ searchParams }: { searchParams: Pro
       <PageHeader
         title="Contas futuras"
         subtitle={`Próximos ${range} dias`}
-        action={<Link href="/upcoming/new" aria-label="Nova conta" className="flex size-11 items-center justify-center rounded-xl bg-secondary text-secondary-foreground"><Plus aria-hidden="true" className="size-5" /></Link>}
+        back="/monthly"
+        action={<IconLink href="/upcoming/new" label="Nova conta" tone="tint"><PlusIcon className="size-5" strokeWidth={1.8} /></IconLink>}
       />
       <div className="flex gap-2">
         {RANGES.map((r) => (
-          <Link key={r} href={`/upcoming?dias=${r}`} className={`min-h-9 rounded-full border px-3.5 py-1.5 text-sm font-medium ${r === range ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"}`}>
+          <Link key={r} href={`/upcoming?dias=${r}`} className={`inline-flex min-h-9 items-center rounded-[6px] px-3 text-sm ${r === range ? "bg-foreground text-white hover:text-white" : "border border-border bg-card text-foreground hover:text-foreground"}`}>
             {r} dias
           </Link>
         ))}
@@ -65,7 +66,7 @@ export default async function UpcomingPage({ searchParams }: { searchParams: Pro
                     <div className="flex min-h-14 items-center gap-3 px-3 py-2.5">
                       <div className="min-w-0 flex-1">
                         <p className="flex items-center gap-1.5 truncate text-sm font-medium">
-                          {item.kind === "subscription" ? <Repeat aria-label="Assinatura" className="size-3.5 shrink-0 text-muted-foreground" /> : null}
+                          {item.kind === "subscription" ? <span title="Assinatura" className="inline-flex text-muted-foreground"><RepeatIcon className="size-3.5 shrink-0" /><span className="sr-only">Assinatura</span></span> : null}
                           {item.description}
                         </p>
                         <p className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">{formatDayLabel(item.date)} <StateBadge state={item.state} /></p>

@@ -1,72 +1,77 @@
-import { Check, LockKeyhole, MessageCircle, Smartphone, Waypoints } from "lucide-react";
 import Link from "next/link";
 
+import { ChatIcon, HomeIcon, PrumoLogo, PrumoSymbol, RepeatIcon } from "@/components/app/icons";
 import { Button } from "@/components/ui/button";
 
-const foundations = [
-  { icon: LockKeyhole, title: "Privacidade desde a base", description: "Seus dados ficam isolados por usuário e a conexão com o banco é feita pela Pluggy, sem guardar sua senha." },
-  { icon: MessageCircle, title: "Direto no WhatsApp", description: "Mande “gastei 45 no mercado” e receba avisos de contas e assinaturas antes do vencimento." },
-  { icon: Smartphone, title: "Pensado para o celular", description: "Uma experiência simples para acompanhar o que importa, em qualquer tela." },
+// Copy from the "01 Marca" board: the plumb line, and three principles.
+const principles = [
+  { n: "01", title: "Clareza antes de tudo", text: "Um número por vez. Se não ajuda a decidir, sai da tela." },
+  { n: "02", title: "Equilíbrio, não vigilância", text: "O que é de cada um e o que é do casal, sem placar e sem culpa." },
+  { n: "03", title: "Calma como padrão", text: "Muito espaço, pouca cor, alertas raros. Dinheiro já gera ruído suficiente." },
+];
+
+const features = [
+  { icon: HomeIcon, title: "Seu mês em um lugar", text: "Entradas e saídas com tags automáticas, contas futuras e gráficos por tag." },
+  { icon: RepeatIcon, title: "Assinaturas sob controle", text: "O Prumo encontra cobranças repetidas e avisa antes de cada uma." },
+  { icon: ChatIcon, title: "Direto no WhatsApp", text: "Mande “gastei 45 no mercado” e receba avisos de contas antes do vencimento." },
 ];
 
 export default function Home() {
   return (
-    <main className="relative isolate min-h-svh overflow-hidden px-4 pb-[max(32px,env(safe-area-inset-bottom))] pt-[max(20px,env(safe-area-inset-top))] sm:px-6">
-      <div aria-hidden="true" className="pointer-events-none absolute -right-28 top-20 -z-10 h-80 w-80 rounded-full bg-emerald-200/45 blur-3xl dark:bg-emerald-700/15" />
+    <main className="min-h-svh px-5 pb-[max(32px,env(safe-area-inset-bottom))] pt-[max(20px,env(safe-area-inset-top))] sm:px-8">
       <div className="mx-auto max-w-5xl">
         <header className="flex items-center justify-between gap-3 py-3">
-          <div className="flex items-center gap-2.5" aria-label="Prumo">
-            <span className="flex size-10 items-center justify-center rounded-2xl bg-emerald-800 text-white shadow-sm dark:bg-emerald-400 dark:text-emerald-950"><Waypoints aria-hidden="true" size={21} strokeWidth={2.5} /></span>
-            <span className="text-xl font-semibold tracking-tight">prumo<span className="text-emerald-700 dark:text-emerald-400">.</span></span>
-          </div>
-          <Button asChild variant="ghost" size="sm"><Link href="/login">Entrar</Link></Button>
+          <PrumoLogo />
+          <Button asChild variant="ghost" size="sm"><Link href="/login" className="no-underline">Entrar</Link></Button>
         </header>
 
-        <section className="grid gap-10 py-14 sm:py-20 lg:grid-cols-[1fr_0.8fr] lg:items-center lg:gap-16" aria-labelledby="hero-title">
-          <div className="max-w-xl">
-            <p className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-emerald-800 dark:text-emerald-300"><span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" /> Finanças com os pés no chão</p>
-            <h1 id="hero-title" className="text-balance text-4xl font-semibold leading-[1.12] tracking-tight sm:text-6xl">Clareza para cuidar do seu dinheiro.</h1>
-            <p className="mt-6 max-w-lg text-pretty text-base leading-7 text-muted-foreground sm:text-lg">Entradas e saídas com tags automáticas, contas futuras, assinaturas detectadas e um assistente no WhatsApp. Tudo pensado para o celular.</p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button size="lg" asChild className="min-h-11 w-full sm:w-auto"><Link href="/signup">Criar conta grátis</Link></Button>
-              <Button size="lg" asChild variant="outline" className="min-h-11 w-full sm:w-auto"><Link href="/login">Já tenho conta</Link></Button>
+        <section className="grid gap-12 py-14 sm:py-20 lg:grid-cols-2 lg:items-center lg:gap-20" aria-labelledby="hero-title">
+          <div className="flex max-w-xl flex-col gap-6">
+            <span className="label-mono">Finanças pessoais e do casal</span>
+            <h1 id="hero-title" className="text-balance text-[40px] font-medium leading-[1.08] tracking-[-0.03em] sm:text-[56px]">Finanças a dois, no prumo.</h1>
+            <p className="max-w-lg text-pretty text-base leading-7 text-muted-foreground sm:text-lg">
+              O prumo é o fio com peso que encontra a vertical. Para o casal, é o ponto de equilíbrio: duas vidas financeiras distintas, alinhadas na mesma direção.
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button asChild className="w-full sm:w-auto"><Link href="/signup" className="no-underline hover:text-primary-foreground">Criar conta grátis</Link></Button>
+              <Button asChild variant="outline" className="w-full sm:w-auto"><Link href="/login" className="no-underline hover:text-foreground">Já tenho conta</Link></Button>
             </div>
           </div>
 
-          <div className="mx-auto w-full max-w-sm rounded-[2rem] border border-border bg-card p-5 shadow-[0_24px_80px_-35px_rgba(21,70,52,.35)] sm:p-6" aria-label="Prévia conceitual do produto">
-            <div className="flex items-start justify-between gap-3">
-              <div><p className="text-xs font-medium uppercase tracking-[.16em] text-muted-foreground">Como funciona</p><h2 className="mt-2 text-xl font-semibold">Tudo no seu ritmo</h2></div>
-              <span className="rounded-full bg-emerald-100 p-2 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300"><Check aria-hidden="true" size={20} /></span>
+          <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
+            <div className="mb-6 flex items-center gap-4">
+              <span className="flex size-14 items-center justify-center rounded-[10px] bg-primary">
+                <PrumoSymbol className="h-9 w-7" color="#ffffff" />
+              </span>
+              <span className="label-mono">Princípios</span>
             </div>
-            <div className="mt-7 space-y-3">
-              {[
-                ["01", "Entenda seu mês", "Entradas, saídas e gráficos por tag"],
-                ["02", "Antecipe compromissos", "Contas e assinaturas antes do vencimento"],
-                ["03", "Mantenha o histórico", "Banco, app ou WhatsApp, cada uma com sua origem"],
-              ].map(([number, title, description]) => (
-                <div key={number} className="flex gap-4 rounded-2xl border border-border/70 bg-background/80 p-4">
-                  <span className="font-mono text-xs font-semibold text-emerald-700 dark:text-emerald-400">{number}</span>
-                  <div><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-sm leading-5 text-muted-foreground">{description}</p></div>
-                </div>
+            <ol className="m-0 list-none p-0">
+              {principles.map((p) => (
+                <li key={p.n} className="grid grid-cols-[40px_1fr] gap-y-1 border-t border-border py-4 last:border-b">
+                  <span className="font-mono text-[13px] text-muted-foreground">{p.n}</span>
+                  <span className="text-lg font-medium">{p.title}</span>
+                  <span className="col-start-2 text-[15px] leading-[22px] text-muted-foreground">{p.text}</span>
+                </li>
               ))}
-            </div>
-            
+            </ol>
           </div>
         </section>
 
-        <section className="border-t border-border py-10 sm:py-14" aria-labelledby="foundations-title">
-          <div className="mb-7"><p className="text-xs font-semibold uppercase tracking-[.16em] text-emerald-800 dark:text-emerald-300">Nossa base</p><h2 id="foundations-title" className="mt-2 text-2xl font-semibold tracking-tight">Construído com cuidado desde o começo</h2></div>
+        <section className="border-t border-border py-10 sm:py-14" aria-labelledby="features-title">
+          <h2 id="features-title" className="mb-7 text-2xl font-medium tracking-[-0.015em]">O que o Prumo faz hoje</h2>
           <div className="grid gap-4 sm:grid-cols-3">
-            {foundations.map(({ icon: Icon, title, description }) => (
-              <article key={title} className="rounded-2xl border border-border bg-card/70 p-5">
-                <Icon aria-hidden="true" className="text-emerald-700 dark:text-emerald-400" size={23} />
-                <h3 className="mt-5 text-base font-semibold">{title}</h3>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+            {features.map(({ icon: Icon, title, text }) => (
+              <article key={title} className="rounded-2xl border border-border bg-card p-6">
+                <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-primary"><Icon className="size-5" /></span>
+                <h3 className="mt-5 text-lg font-semibold">{title}</h3>
+                <p className="mt-2 text-[15px] leading-6 text-muted-foreground">{text}</p>
               </article>
             ))}
           </div>
         </section>
-        <footer className="border-t border-border py-6 text-sm text-muted-foreground">Prumo · finanças com clareza.</footer>
+        <footer className="flex items-center gap-2 border-t border-border py-6 text-sm text-muted-foreground">
+          <PrumoSymbol className="h-4 w-3" color="var(--muted-foreground)" /> Prumo · finanças a dois, no prumo.
+        </footer>
       </div>
     </main>
   );

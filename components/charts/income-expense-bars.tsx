@@ -11,7 +11,7 @@ function TooltipCard({ active, payload, label }: TooltipContentProps<ValueType, 
   if (!active || !payload?.length) return null;
   const row = payload[0].payload as MonthBar;
   return (
-    <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs shadow-lg">
+    <div className="rounded-[10px] border border-border bg-card px-3 py-2 text-xs shadow-[0_8px_24px_rgba(18,21,18,0.08)]">
       <p className="mb-1 font-semibold capitalize">{label}</p>
       <p className="flex items-center gap-2"><Swatch role="income" /> Entradas <span className="tabular ml-auto pl-3 font-medium">{formatBRL(row.incomeCents)}</span></p>
       <p className="flex items-center gap-2"><Swatch role="expense" /> Saídas <span className="tabular ml-auto pl-3 font-medium">{formatBRL(row.expenseCents)}</span></p>

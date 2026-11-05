@@ -16,14 +16,14 @@ export function WhatsappLinkCode({ botNumber }: { botNumber?: string }) {
   return (
     <div className="grid gap-3">
       {result?.code ? (
-        <div className="rounded-xl bg-muted p-3 text-center">
+        <div className="rounded-[10px] bg-muted p-3 text-center">
           <p className="text-xs text-muted-foreground">Envie para o número do bot:</p>
           <p className="tabular mt-1 select-all text-2xl font-semibold tracking-widest">vincular {result.code}</p>
           <p className="mt-1 text-xs text-muted-foreground">Válido por 15 minutos, uso único.</p>
         </div>
       ) : null}
       {deepLink ? (
-        <a href={deepLink} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground">
+        <a href={deepLink} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[10px] bg-primary px-4 text-sm font-medium text-primary-foreground">
           <MessageCircle aria-hidden="true" className="size-4" /> Abrir no WhatsApp
         </a>
       ) : null}

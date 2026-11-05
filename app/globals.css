@@ -2,53 +2,41 @@
 /* The WhatsApp worker (and its Chromium session) is not UI; never scan it for classes. */
 @source not "../bot";
 
+/*
+ * Prumo design system (canvas "Prumo — Design System", 02 Cores / 04 Fundamentos).
+ * 90% of the interface is paper, ink and line; Prumo green marks what matters.
+ * The design defines a light theme only.
+ */
 :root {
-  --background: #f6f8f5;
-  --foreground: #17241f;
-  --card: #ffffff;
-  --card-foreground: #17241f;
-  --primary: #146c50;
+  --background: #f5f6f3; /* Papel */
+  --foreground: #121512; /* Tinta */
+  --card: #ffffff; /* Superfície */
+  --card-foreground: #121512;
+  --primary: #1d4d3f; /* Nós · verde Prumo */
+  --primary-press: #123329;
+  --primary-400: #3f7a68;
   --primary-foreground: #ffffff;
-  --secondary: #e4eee8;
-  --secondary-foreground: #205a45;
-  --muted: #eaf0eb;
-  --muted-foreground: #596b60;
-  --border: #dce6de;
-  --ring: #217c5b;
-  --danger: #b42318;
-  --success: #006300;
-  --warning-bg: #fff4d6;
-  --warning-fg: #7a4b00;
-  /* Chart roles (validated categorical slots 1-2, see dataviz palette). */
-  --series-income: #2a78d6;
-  --series-expense: #eb6834;
-  --chart-grid: #e1e0d9;
-  --chart-axis: #898781;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #101917;
-    --foreground: #edf4ef;
-    --card: #17231f;
-    --card-foreground: #edf4ef;
-    --primary: #72d8a7;
-    --primary-foreground: #10271c;
-    --secondary: #203a2d;
-    --secondary-foreground: #cbefda;
-    --muted: #22332a;
-    --muted-foreground: #a9bdaf;
-    --border: #30473a;
-    --ring: #72d8a7;
-    --danger: #ff8a80;
-    --success: #0ca30c;
-    --warning-bg: #3a2d10;
-    --warning-fg: #ffd27a;
-    --series-income: #3987e5;
-    --series-expense: #d95926;
-    --chart-grid: #2c2c2a;
-    --chart-axis: #898781;
-  }
+  --secondary: #e3ede8; /* tint do verde */
+  --secondary-foreground: #123329;
+  --muted: #ecede9; /* trilho de seletores */
+  --muted-foreground: #5e625c; /* Grafite */
+  --subtle: #f0f1ed; /* fundo de ícones */
+  --border: #e3e5e0; /* Linha */
+  --ring: #1d4d3f;
+  --danger: #a8352a; /* Crítico: só erros e estouros reais */
+  --danger-bg: #fbf1ef;
+  --success: #2b7350; /* Positivo: receitas */
+  --warning: #8a6100; /* Atenção */
+  --warning-bg: #f5edd8;
+  --warning-fg: #5e4200;
+  --blue: #3a5ba0;
+  --terracotta: #b4582a;
+  /* Chart roles, as drawn on the designed home screen. */
+  --series-income: #1d4d3f;
+  --series-expense: #b4582a;
+  --chart-grid: #e3e5e0;
+  --chart-axis: #5e625c;
+  --shadow-sheet: 0 8px 24px rgba(18, 21, 18, 0.08);
 }
 
 @theme inline {
@@ -57,32 +45,56 @@
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-primary: var(--primary);
+  --color-primary-press: var(--primary-press);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-subtle: var(--subtle);
   --color-border: var(--border);
   --color-ring: var(--ring);
   --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
   --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-warning-bg: var(--warning-bg);
   --color-warning-fg: var(--warning-fg);
   --color-income: var(--series-income);
   --color-expense: var(--series-expense);
-  --font-sans: var(--font-geist), Arial, Helvetica, sans-serif;
+  --font-sans: var(--font-geist), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --radius-sm: 6px; /* chips */
+  --radius-md: 10px; /* campos */
+  --radius-lg: 16px; /* cards */
 }
 
 * { box-sizing: border-box; }
-html { color-scheme: light dark; }
+html { color-scheme: light; }
 body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
-::selection { background: #abdcbf; color: #10271c; }
-:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+::selection { background: var(--secondary); color: var(--secondary-foreground); }
 
-input, select, textarea { font-size: 16px; }
-.tabular { font-variant-numeric: tabular-nums; }
 /* Single-column grids let children shrink so long text truncates instead of widening the page.
    In the base layer, so grid-cols-* utilities still override it. */
 @layer base {
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  /* 16px minimum keeps iOS from zooming into fields. */
+  input, select, textarea { font-size: 16px; }
   .grid { grid-template-columns: minmax(0, 1fr); }
+  /* Links are Prumo green; utilities (nav, list rows) still override because this is the base layer. */
+  a { color: var(--primary); text-decoration: none; }
+  a:hover { color: var(--primary-press); }
+}
+
+@layer components {
+  .tabular { font-variant-numeric: tabular-nums; }
+  /* Rótulo · 12/16 · Mono, uppercase. */
+  .label-mono {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 16px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
 }

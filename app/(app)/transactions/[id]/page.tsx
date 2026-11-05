@@ -67,7 +67,7 @@ export default async function TransactionPage({ params, searchParams }: { params
           amountText={centsToInput(tx.amount_cents)}
         />
       </Card>
-      {erro ? <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{erro.slice(0, 120)}</p> : null}
+      {erro ? <p role="alert" className="rounded-[10px] bg-danger-bg px-3 py-2 text-sm text-danger">{erro.slice(0, 120)}</p> : null}
       <form action={deleteTransactionAction}>
         <input type="hidden" name="id" value={tx.id} />
         <SubmitButton variant="ghost" pendingText="Excluindo…" className="w-full text-danger">

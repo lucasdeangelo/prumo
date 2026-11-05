@@ -48,7 +48,7 @@ export default async function BillPage({ params }: { params: Promise<{ id: strin
               <ul className="grid gap-2">
                 {candidates.map((c) => (
                   <li key={c.transactionId}>
-                    <form action={payBillAction} className="flex items-center gap-3 rounded-xl border border-border p-2.5">
+                    <form action={payBillAction} className="flex items-center gap-3 rounded-[10px] border border-border p-2.5">
                       <input type="hidden" name="id" value={bill.id} />
                       <input type="hidden" name="transactionId" value={c.transactionId} />
                       <div className="min-w-0 flex-1 text-sm">

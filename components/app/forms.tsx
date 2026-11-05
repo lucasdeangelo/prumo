@@ -81,7 +81,7 @@ export function EditTransactionForm({
       <Field label="Descrição"><Input name="description" defaultValue={tx.description} maxLength={140} /></Field>
       <Field label="Tag"><TagSelect tags={tags} defaultValue={tx.tagId} emptyLabel="Sem tag" /></Field>
       {tx.merchant ? (
-        <label className="flex items-start gap-3 rounded-xl bg-muted p-3 text-sm">
+        <label className="flex items-start gap-3 rounded-[10px] bg-muted p-3 text-sm">
           <input type="checkbox" name="learn" defaultChecked className="mt-0.5 size-5 accent-[var(--primary)]" />
           <span>Usar esta tag sempre para <strong>{tx.merchant}</strong> (cria uma regra e ajusta as anteriores automáticas)</span>
         </label>

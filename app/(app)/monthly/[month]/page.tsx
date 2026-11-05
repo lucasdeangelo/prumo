@@ -1,16 +1,18 @@
-import { Download, X } from "lucide-react";
+import { X } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { MonthSwitcher, PageHeader, StatTile } from "@/components/app/bits";
+import { Amount, IconLink, MonthSwitcher, PageHeader, SectionHeader } from "@/components/app/bits";
+import { DownloadIcon } from "@/components/app/icons";
 import { TransactionList } from "@/components/app/transaction-list";
 import { CategoryBars } from "@/components/charts/category-bars";
 import { CumulativeLine } from "@/components/charts/cumulative-line";
 import { Card, CardTitle, EmptyState } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
-import { formatMonthLong, isMonthKey, monthBounds, monthOf, todayIn } from "@/lib/domain/dates";
+import { formatDayShort, formatMonthLong, isMonthKey, monthBounds, monthOf, todayIn } from "@/lib/domain/dates";
+import { formatBRL } from "@/lib/domain/money";
 import { summarizeMonth } from "@/lib/domain/summary";
-import { listTags, listTransactions } from "@/lib/repositories/reads";
+import { listBills, listTags, listTransactions } from "@/lib/repositories/reads";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Mês · Prumo" };
@@ -27,11 +29,14 @@ export default async function MonthPage({ params, searchParams }: { params: Prom
   const { start, end, prev, next } = monthBounds(month);
   const prevBounds = monthBounds(prev);
 
-  const [tags, transactions, previous] = await Promise.all([
+  const [tags, transactions, previous, openBills] = await Promise.all([
     listTags(db, user.id),
     listTransactions(db, user.id, { from: start, to: end, limit: 3000 }),
     listTransactions(db, user.id, { from: prevBounds.start, to: prevBounds.end, type: "debit", limit: 3000, columns: "amount_cents, type, transaction_date, tag_id" }),
+    listBills(db, user.id, { status: ["pending", "overdue"], to: end }),
   ]);
+  // Upcoming bills live inside Mês (navigation map): open bills due up to the end of this month.
+  const monthBills = month >= current ? openBills : [];
 
   const summary = summarizeMonth(transactions, tags, month);
   const previousSummary = summarizeMonth(previous, tags, prev);
@@ -61,50 +66,88 @@ export default async function MonthPage({ params, searchParams }: { params: Prom
   const deltaPct = previousSummary.expenseCents > 0 ? Math.round(((summary.expenseCents - previousSummary.expenseCents) / previousSummary.expenseCents) * 100) : null;
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-5">
       <PageHeader
-        title="Visão do mês"
-        action={
-          <a href={`/api/export/${month}`} className="flex size-11 items-center justify-center rounded-xl hover:bg-muted" aria-label="Exportar CSV">
-            <Download aria-hidden="true" className="size-5" />
-          </a>
-        }
+        title="Mês"
+        action={<IconLink href={`/api/export/${month}`} label="Exportar CSV" download><DownloadIcon className="size-5" /></IconLink>}
       />
       <MonthSwitcher label={formatMonthLong(month)} prevHref={`/monthly/${prev}`} nextHref={month < current ? `/monthly/${next}` : undefined} />
 
-      <div className="grid grid-cols-3 gap-2">
-        <StatTile label="Entradas" cents={summary.incomeCents} tone="in" />
-        <StatTile label="Saídas" cents={summary.expenseCents} tone="out" hint={deltaPct === null ? undefined : `${deltaPct > 0 ? "+" : ""}${deltaPct}% vs. anterior`} />
-        <StatTile label="Resultado" cents={summary.netCents} />
-      </div>
+      <section className="flex flex-col gap-4 rounded-2xl bg-primary p-5 text-primary-foreground">
+        <div className="flex flex-col gap-1.5">
+          <span className="label-mono text-[#cfe0d8]">Resultado do mês</span>
+          <span className="tabular text-[40px] font-medium leading-[1.05] tracking-[-0.03em]">{formatBRL(summary.netCents)}</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2 border-t border-white/20 pt-3.5">
+          <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">Entrou<span className="tabular text-[15px] font-medium text-white">{formatBRL(summary.incomeCents)}</span></span>
+          <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">Saiu<span className="tabular text-[15px] font-medium text-white">{formatBRL(summary.expenseCents)}</span></span>
+          <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">vs. anterior<span className="tabular text-[15px] font-medium text-white">{deltaPct === null ? "—" : `${deltaPct > 0 ? "+" : ""}${deltaPct}%`}</span></span>
+        </div>
+      </section>
+
+      <section className="grid gap-2.5">
+        <SectionHeader title="Para onde foi" />
+        <Card>
+          {categoryRows.length > 0 ? <CategoryBars rows={categoryRows} totalCents={summary.expenseCents} limit={8} /> : <EmptyState title="Sem gastos neste mês" />}
+        </Card>
+      </section>
+
+      {month >= current ? (
+        <section className="grid gap-2.5">
+          <SectionHeader title="Próximas contas" action={<Link href="/upcoming/new" className="flex min-h-11 items-center text-sm font-medium no-underline">Nova conta</Link>} />
+          {monthBills.length > 0 ? (
+            <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+              {monthBills.slice(0, 4).map((bill) => {
+                const late = bill.due_date < today;
+                return (
+                  <li key={bill.id}>
+                    <Link href={`/upcoming/${bill.id}`} className={cn("flex min-h-14 items-center gap-3 px-4 py-3 text-foreground no-underline hover:text-foreground", late ? "bg-danger-bg" : "hover:bg-[#fafaf8]")}>
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="truncate text-[15px] font-medium">{bill.description}</span>
+                        <span className={cn("text-[13px]", late ? "text-danger" : "text-muted-foreground")}>{late ? `Venceu ${formatDayShort(bill.due_date)}` : formatDayShort(bill.due_date)}</span>
+                      </span>
+                      <Amount cents={bill.amount_cents} type={bill.type === "payable" ? undefined : "in"} className="text-[15px]" />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <EmptyState title="Nenhuma conta em aberto neste mês" />
+          )}
+          <Link href="/upcoming" className="flex min-h-11 items-center justify-center text-sm font-medium no-underline">Ver contas futuras</Link>
+        </section>
+      ) : null}
 
       <Card>
         <CardTitle>Gasto acumulado</CardTitle>
         <CumulativeLine data={line} />
       </Card>
 
-      <Card>
-        <CardTitle>Por tag</CardTitle>
-        {categoryRows.length > 0 ? <CategoryBars rows={categoryRows} totalCents={summary.expenseCents} limit={8} /> : <EmptyState title="Sem gastos neste mês" />}
-      </Card>
-
       <section className="grid gap-3">
+        <SectionHeader title="Movimentações" action={<span className="text-xs text-muted-foreground">{filtered.length} no mês</span>} />
         <div className="flex flex-wrap items-center gap-2">
           {[
             { label: "Tudo", href: base, active: !activeFilter },
             { label: "Saídas", href: `${base}?type=debit`, active: filterType === "debit" && filterTag === undefined },
             { label: "Entradas", href: `${base}?type=credit`, active: filterType === "credit" && filterTag === undefined },
           ].map((chip) => (
-            <Link key={chip.label} href={chip.href} className={cn("min-h-9 rounded-full border px-3.5 py-1.5 text-sm font-medium", chip.active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card")}>
+            <Link
+              key={chip.label}
+              href={chip.href}
+              className={cn(
+                "inline-flex min-h-9 items-center rounded-[6px] px-3 text-sm no-underline",
+                chip.active ? "bg-foreground text-white hover:text-white" : "border border-border bg-card text-foreground hover:text-foreground",
+              )}
+            >
               {chip.label}
             </Link>
           ))}
           {filterTag !== undefined ? (
-            <Link href={base} className="flex min-h-9 items-center gap-1 rounded-full border border-primary bg-secondary px-3 py-1.5 text-sm font-medium text-secondary-foreground">
+            <Link href={base} className="inline-flex min-h-9 items-center gap-1 rounded-[6px] bg-foreground px-3 text-sm text-white no-underline hover:text-white">
               {filterTag ? tagById.get(filterTag)?.name : "Sem tag"} <X aria-label="Limpar filtro" className="size-4" />
             </Link>
           ) : null}
-          <span className="ml-auto text-xs text-muted-foreground">{filtered.length} itens</span>
         </div>
         {filtered.length > 0 ? <TransactionList transactions={filtered} tags={tags} /> : <EmptyState title="Nada por aqui" />}
       </section>

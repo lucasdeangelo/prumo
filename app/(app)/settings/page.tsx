@@ -42,7 +42,7 @@ export default async function SettingsPage() {
             {items.map((item) => {
               const itemAccounts = accounts.filter((a) => a.pluggy_item_id === item.id);
               return (
-                <li key={item.id} className="grid gap-2 rounded-xl border border-border p-3">
+                <li key={item.id} className="grid gap-2 rounded-[10px] border border-border p-3">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-medium">{item.institution_name ?? "Banco"}</p>
                     <span className="text-xs text-muted-foreground">{STATUS_LABEL[item.status ?? ""] ?? item.status}</span>
@@ -68,12 +68,12 @@ export default async function SettingsPage() {
           <p className="mb-3 text-sm text-muted-foreground">Conecte sua conta pela Pluggy para importar entradas e saídas com tags automáticas. O Prumo não vê sua senha do banco.</p>
         )}
         {items.some((item) => item.institution_name === "MeuPluggy") ? (
-          <p className="mb-3 rounded-xl bg-muted p-3 text-sm text-muted-foreground">
+          <p className="mb-3 rounded-[10px] bg-muted p-3 text-sm text-muted-foreground">
             O MeuPluggy reúne todos os seus bancos numa conexão só. Para incluir outro banco, conecte-o em{" "}
             <a href="https://meu.pluggy.ai" target="_blank" rel="noreferrer" className="font-medium text-primary underline">meu.pluggy.ai</a>. Ele entra na próxima atualização automática da Pluggy (a cada 24 h); depois toque em <strong>Sincronizar agora</strong>.
           </p>
         ) : null}
-        {pluggyReady ? <PluggyConnectButton /> : <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">Configure PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET no servidor para habilitar.</p>}
+        {pluggyReady ? <PluggyConnectButton /> : <p className="rounded-[10px] bg-muted p-3 text-sm text-muted-foreground">Configure PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET no servidor para habilitar.</p>}
       </Card>
 
       <Card>
