@@ -29,6 +29,9 @@ export type Account = {
   is_manual: boolean;
   pluggy_item_id: string | null;
   archived_at: string | null;
+  visibility: "private" | "totals" | "details";
+  institution: string | null;
+  card_last4: string | null;
 };
 
 export type PluggyItem = {
@@ -55,6 +58,12 @@ export type Transaction = {
   category_source: string | null;
   source: string;
   is_reviewed: boolean;
+  user_id?: string;
+  scope: "mine" | "ours" | "partner";
+  privacy: "account" | "category_only" | "hidden";
+  surprise_until: string | null;
+  surprise_hide_amount: boolean;
+  free_money: boolean;
 };
 
 export type UpcomingBill = {
@@ -72,6 +81,7 @@ export type UpcomingBill = {
   notify_days_before: number;
   matched_transaction_id: string | null;
   paid_at: string | null;
+  scope: "mine" | "ours";
 };
 
 export type Subscription = {
@@ -87,16 +97,17 @@ export type Subscription = {
   is_auto_detected: boolean;
   detection_confidence: number | null;
   notify_days_before: number;
+  scope: "mine" | "ours";
 };
 
 export const TRANSACTION_COLUMNS =
-  "id, account_id, amount_cents, type, provider_description, user_description, merchant, normalized_merchant, transaction_date, tag_id, category_confidence, category_source, source, is_reviewed";
+  "id, account_id, amount_cents, type, provider_description, user_description, merchant, normalized_merchant, transaction_date, tag_id, category_confidence, category_source, source, is_reviewed, user_id, scope, privacy, surprise_until, surprise_hide_amount, free_money";
 export const BILL_COLUMNS =
-  "id, account_id, description, amount_cents, type, due_date, status, recurrence_type, recurrence_interval, recurrence_unit, tag_id, notify_days_before, matched_transaction_id, paid_at";
+  "id, account_id, description, amount_cents, type, due_date, status, recurrence_type, recurrence_interval, recurrence_unit, tag_id, notify_days_before, matched_transaction_id, paid_at, scope";
 export const SUBSCRIPTION_COLUMNS =
-  "id, name, normalized_name, amount_cents, frequency, next_charge_date, account_id, tag_id, status, is_auto_detected, detection_confidence, notify_days_before";
+  "id, name, normalized_name, amount_cents, frequency, next_charge_date, account_id, tag_id, status, is_auto_detected, detection_confidence, notify_days_before, scope";
 export const TAG_COLUMNS = "id, name, color, icon, is_default, excluded_from_totals";
-export const ACCOUNT_COLUMNS = "id, name, type, subtype, balance_cents, balance_synced_at, is_manual, pluggy_item_id, archived_at";
+export const ACCOUNT_COLUMNS = "id, name, type, subtype, balance_cents, balance_synced_at, is_manual, pluggy_item_id, archived_at, visibility, institution, card_last4";
 
 export function transactionLabel(tx: Pick<Transaction, "user_description" | "provider_description" | "merchant">): string {
   return tx.user_description || tx.merchant || tx.provider_description || "Sem descrição";

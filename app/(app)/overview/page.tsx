@@ -1,126 +1,336 @@
 import Link from "next/link";
 
-import { Amount, PageHeader, SectionHeader, StatTile, StateBadge } from "@/components/app/bits";
-import { ChevronRightIcon, SparkIcon } from "@/components/app/icons";
-import { TransactionList } from "@/components/app/transaction-list";
-import { CategoryBars } from "@/components/charts/category-bars";
-import { IncomeExpenseBars } from "@/components/charts/income-expense-bars";
-import { Card, CardTitle, EmptyState } from "@/components/ui/card";
+import { Amount, SectionHeader } from "@/components/app/bits";
+import { CoupleAvatars, InstitutionMark, SegmentBar, SpaceSwitcher, UpdatedAt, VisibilityBadge, PERSON_BG } from "@/components/app/couple";
+import { HomeAnalytics } from "@/components/app/home-analytics";
+import { ChevronRightIcon } from "@/components/app/icons";
+import { Card, EmptyState } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
-import { addDays, formatDayShort, formatMonthLong, formatMonthShort, lastMonths, monthBounds, monthOf, todayIn } from "@/lib/domain/dates";
-import { buildForecast, forecastTotals } from "@/lib/domain/forecast";
+import {
+  budgetOverview,
+  cardInvoices,
+  freeMoneyFor,
+  goalsOverview,
+  loadCoupleContext,
+  loadSharedHistory,
+  loadSharedPlans,
+  partnerView,
+  pendingApprovalsFor,
+} from "@/lib/application/couple-data";
+import { daysLeftInMonth } from "@/lib/domain/couple";
+import { addMonths, formatDayShort, formatMonthLong, monthBounds, monthOf, todayIn } from "@/lib/domain/dates";
 import { formatBRL } from "@/lib/domain/money";
-import { monthlyEquivalentCents } from "@/lib/domain/recurrence";
-import { monthlySeries, summarizeMonth } from "@/lib/domain/summary";
 import { listAccounts, listBills, listSubscriptions, listTags, listTransactions } from "@/lib/repositories/reads";
+import { currentSpace } from "@/lib/space";
+import { transactionLabel, type Transaction } from "@/lib/types";
 
 export const metadata = { title: "Início · Prumo" };
+
+const monthName = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" });
 
 export default async function OverviewPage() {
   const { user, db } = await requireUser();
   const today = todayIn();
   const month = monthOf(today);
-  const months = lastMonths(month, 6);
-  const historyStart = monthBounds(months[0]).start;
-
-  const [tags, accounts, history, bills, subscriptions] = await Promise.all([
-    listTags(db, user.id),
-    listAccounts(db, user.id),
-    listTransactions(db, user.id, { from: historyStart, to: monthBounds(month).end, limit: 5000 }),
-    listBills(db, user.id, { status: ["pending", "overdue"] }),
-    listSubscriptions(db, user.id),
-  ]);
-
-  const summary = summarizeMonth(history, tags, month);
-  const series = monthlySeries(history, tags, months).map((m) => ({ ...m, label: formatMonthShort(m.month) }));
-  const tagById = new Map(tags.map((t) => [t.id, t]));
-  const categoryRows = summary.expenseByTag.map((row) => ({
-    tagId: row.tagId,
-    name: row.tagId ? tagById.get(row.tagId)?.name ?? "Sem tag" : "Sem tag",
-    color: row.tagId ? tagById.get(row.tagId)?.color ?? null : null,
-    cents: row.cents,
-    href: `/monthly/${month}?tag=${row.tagId ?? "none"}`,
-  }));
-
-  const forecast = buildForecast({ bills, subscriptions, today, to: addDays(today, 14) });
-  const nextItems = forecast.slice(0, 5);
-  const overdue = forecast.filter((i) => i.state === "overdue");
-  const withBalance = accounts.filter((a) => a.balance_cents !== null);
-  const balance = withBalance.reduce((sum, a) => sum + (a.balance_cents ?? 0), 0);
-  const candidates = subscriptions.filter((s) => s.status === "candidate");
-  const monthlySubs = subscriptions.filter((s) => s.status === "active").reduce((sum, s) => sum + monthlyEquivalentCents(s.amount_cents, s.frequency), 0);
-  const recent = history.slice(0, 5);
-  const untagged = history.filter((t) => t.transaction_date >= monthBounds(month).start && !t.tag_id).length;
+  const historyStart = monthBounds(addMonths(`${month}-01`, -5).slice(0, 7)).start;
+  const [ctx, space] = await Promise.all([loadCoupleContext(user.id, month), currentSpace()]);
+  const { household } = ctx;
+  const me = household?.me ?? { userId: user.id, name: user.name?.split(" ")[0] ?? "Você", initial: (user.name ?? "V").charAt(0).toUpperCase(), color: "blue" as const, incomeCents: null, pixKey: null };
+  const partner = household?.partner ?? null;
+  const shownSpace = space === "nosso" ? "nosso" : "meu";
+  const lowerMonth = monthName.format(new Date(`${month}-01T00:00:00Z`));
 
   return (
-    <div className="grid gap-4">
-      <PageHeader title={`Olá${user.name ? `, ${user.name.split(" ")[0]}` : ""}`} subtitle={formatMonthLong(month)} />
+    <div className="grid gap-5">
+      <SpaceSwitcher space={shownSpace} me={me} partner={partner} returnTo="/overview" />
+      {shownSpace === "nosso" ? (
+        partner && household ? (
+          <NossoHome userId={user.id} ctx={ctx} today={today} month={month} lowerMonth={lowerMonth} historyStart={historyStart} />
+        ) : (
+          <InviteCard />
+        )
+      ) : (
+        <MeuHome userId={user.id} db={db} ctx={ctx} today={today} month={month} lowerMonth={lowerMonth} historyStart={historyStart} meName={me.name} />
+      )}
+    </div>
+  );
+}
 
-      <Card className="flex flex-col gap-2 border-0 bg-primary p-6 text-primary-foreground">
-        <p className="label-mono text-[#cfe0d8]">Resultado do mês</p>
-        <p className="tabular text-[40px] font-medium leading-[1.05] tracking-[-0.03em]">{formatBRL(summary.netCents)}</p>
-        <p className="text-sm text-[#cfe0d8]">
-          {withBalance.length > 0 ? <>Saldo informado pelos bancos: <span className="tabular font-medium">{formatBRL(balance)}</span></> : "Conecte um banco em Ajustes para ver o saldo."}
-        </p>
-      </Card>
+type Ctx = Awaited<ReturnType<typeof loadCoupleContext>>;
 
-      <div className="grid grid-cols-2 gap-3">
-        <StatTile label="Entradas" cents={summary.incomeCents} tone="in" />
-        <StatTile label="Saídas" cents={summary.expenseCents} tone="out" />
-      </div>
+function InviteCard() {
+  return (
+    <Card className="flex flex-col gap-3">
+      <p className="label-mono">Espaço Nosso</p>
+      <h1 className="text-2xl font-medium tracking-[-0.02em]">Finanças a dois, no prumo</h1>
+      <p className="text-sm text-muted-foreground">
+        Convide seu par para ver juntos o que é dos dois: orçamento do lar, fatura compartilhada, metas e combinados. Cada um continua dono do que é seu.
+      </p>
+      <Link href="/couple" className="inline-flex min-h-12 items-center justify-center rounded-full bg-primary px-6 text-[15px] font-medium text-primary-foreground hover:bg-primary-press hover:text-primary-foreground">
+        Convidar meu par
+      </Link>
+    </Card>
+  );
+}
 
-      {overdue.length > 0 ? (
-        <Link href="/upcoming" className="flex min-h-12 items-center gap-3 rounded-2xl bg-danger-bg px-4 py-3 text-sm font-medium text-danger hover:text-danger">
-          <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-danger" />
-          <span className="flex-1">{overdue.length} conta(s) vencida(s): {formatBRL(forecastTotals(overdue).outCents)}</span>
-          <ChevronRightIcon className="size-4" strokeWidth={1.8} />
+async function MeuHome({ userId, db, ctx, today, month, lowerMonth, historyStart, meName }: { userId: string; db: Parameters<typeof listTags>[0]; ctx: Ctx; today: string; month: string; lowerMonth: string; historyStart: string; meName: string }) {
+  const { household } = ctx;
+  const hasPartner = Boolean(household?.partner);
+  const [tags, accounts, history, bills, subscriptions, freeMoney, pending] = await Promise.all([
+    listTags(db, userId),
+    listAccounts(db, userId),
+    listTransactions(db, userId, { from: historyStart, to: monthBounds(month).end, limit: 5000 }),
+    listBills(db, userId, { status: ["pending", "overdue"] }),
+    listSubscriptions(db, userId),
+    household ? freeMoneyFor(household, userId, ctx.facts, month) : Promise.resolve(null),
+    household ? pendingApprovalsFor(household.id, userId) : Promise.resolve([]),
+  ]);
+  // In Meu, what is marked "Nosso" lives in the shared space.
+  const mine = (t: { scope?: string }) => !hasPartner || t.scope !== "ours";
+  const myHistory = history.filter(mine);
+  const partnerName = household?.partner?.name ?? "seu par";
+  const recentMine = myHistory.filter((t) => t.transaction_date >= monthBounds(month).start).slice(0, 3);
+  const withBalance = accounts.filter((a) => a.balance_cents !== null);
+
+  return (
+    <>
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-medium tracking-[-0.02em]">Seu {lowerMonth}, {meName}</h1>
+        <UpdatedAt at={ctx.syncedAt} />
+      </header>
+
+      {freeMoney ? (
+        <Link href="/couple/free-money" className="block rounded-2xl border border-border bg-card p-5 text-foreground no-underline hover:text-foreground">
+          <div className="flex items-center justify-between">
+            <span className="label-mono">Dinheiro livre</span>
+            <VisibilityBadge kind="totals" />
+          </div>
+          <p className="tabular mt-2 text-[32px] font-medium tracking-[-0.03em]">{formatBRL(freeMoney.remainingCents)} <span className="text-base text-muted-foreground">restam</span></p>
+          <div className="mt-3"><SegmentBar segments={[{ value: freeMoney.usedCents, color: PERSON_BG[household!.me.color] }]} total={freeMoney.allowanceCents} label={`${formatBRL(freeMoney.usedCents)} de ${formatBRL(freeMoney.allowanceCents)}`} /></div>
+          <p className="mt-2 text-[13px] text-muted-foreground">{formatBRL(freeMoney.usedCents)} de {formatBRL(freeMoney.allowanceCents)} · renova em 1º de {monthName.format(new Date(`${freeMoney.renewsOn}T00:00:00Z`))}. {partnerName.charAt(0).toUpperCase() + partnerName.slice(1)} vê só o total.</p>
         </Link>
       ) : null}
 
-      {candidates.length > 0 ? (
-        <Link href="/subscriptions" className="flex min-h-12 items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground hover:text-foreground">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-warning-bg text-warning-fg"><SparkIcon className="size-4" /></span>
-          <span className="flex-1">Encontramos {candidates.length} possível(is) assinatura(s). Confirme?</span>
-          <ChevronRightIcon className="size-4 text-muted-foreground" strokeWidth={1.8} />
-        </Link>
-      ) : null}
-
-      <Card>
-        <CardTitle>Últimos 6 meses</CardTitle>
-        <IncomeExpenseBars data={series} />
-      </Card>
-
-      <Card>
-        <CardTitle action={<Link href={`/monthly/${month}`} className="text-sm font-medium">Ver mês</Link>}>Gastos por tag</CardTitle>
-        {categoryRows.length > 0 ? <CategoryBars rows={categoryRows} totalCents={summary.expenseCents} /> : <EmptyState title="Sem gastos neste mês ainda" />}
-        {untagged > 0 ? <p className="mt-3 text-xs text-muted-foreground">{untagged} movimentação(ões) sem tag.</p> : null}
-      </Card>
-
-      <Card>
-        <CardTitle action={<Link href="/upcoming" className="text-sm font-medium">Todas</Link>}>Próximos 14 dias</CardTitle>
-        {nextItems.length > 0 ? (
-          <ul className="grid gap-2.5">
-            {nextItems.map((item) => (
-              <li key={item.key} className="flex items-center gap-3 text-sm">
-                <span className="tabular w-12 shrink-0 text-xs text-muted-foreground">{formatDayShort(item.date)}</span>
-                <span className="min-w-0 flex-1 truncate">{item.description}</span>
-                <StateBadge state={item.state} />
-                <Amount cents={item.amountCents} type={item.direction} className="text-sm" />
+      {accounts.length > 0 ? (
+        <section className="grid gap-2">
+          <SectionHeader title="Suas contas" action={hasPartner ? <Link href="/privacy/visibility" className="flex min-h-11 items-center text-sm font-medium">Visibilidade</Link> : undefined} />
+          <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+            {accounts.map((a) => (
+              <li key={a.id} className="flex min-h-16 items-center gap-3 px-4 py-3">
+                <InstitutionMark name={a.institution ?? a.name} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-medium">{a.name}{a.card_last4 ? ` •• ${a.card_last4}` : ""}</span>
+                  {hasPartner ? <span className="mt-1 block"><VisibilityBadge kind={a.visibility} /></span> : null}
+                </span>
+                {a.balance_cents !== null ? <Amount cents={Math.abs(a.balance_cents)} className="text-[15px]" /> : null}
               </li>
             ))}
           </ul>
-        ) : (
-          <EmptyState title="Nada previsto"><Link href="/upcoming/new">Cadastre uma conta futura</Link>.</EmptyState>
-        )}
-        {monthlySubs > 0 ? <p className="mt-3 text-xs text-muted-foreground">Assinaturas ativas custam {formatBRL(monthlySubs)} por mês.</p> : null}
-      </Card>
+        </section>
+      ) : null}
+
+      {hasPartner && recentMine.length > 0 ? (
+        <section className="grid gap-2">
+          <SectionHeader title="Seus lançamentos" action={<Link href={`/monthly/${month}`} className="flex min-h-11 items-center text-sm font-medium">Ver todos</Link>} />
+          <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+            {recentMine.map((t) => (
+              <li key={t.id}>
+                <Link href={`/transactions/${t.id}`} className="flex min-h-14 items-center gap-3 px-4 py-3 text-foreground no-underline hover:text-foreground">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-medium">{transactionLabel(t)}</span>
+                    <span className="mt-1 block"><PrivacyBadge tx={t} today={today} partnerName={household!.partner!.name} /></span>
+                  </span>
+                  <Amount cents={t.amount_cents} type={t.type} className="text-[15px]" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {pending.length > 0 ? (
+        <Link href="/couple/approvals" className="flex min-h-14 items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-foreground no-underline hover:text-foreground">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-medium">Combinados do casal</span>
+            <span className="block text-[13px] text-muted-foreground">{pending.length === 1 ? "1 compra esperando sua resposta" : `${pending.length} compras esperando sua resposta`}</span>
+          </span>
+          <ChevronRightIcon className="size-4 text-muted-foreground" />
+        </Link>
+      ) : null}
+
+      <HomeAnalytics
+        month={month}
+        today={today}
+        history={myHistory}
+        tags={tags}
+        bills={bills.filter(mine)}
+        subscriptions={subscriptions.filter(mine)}
+        balanceCents={withBalance.reduce((s, a) => s + (a.balance_cents ?? 0), 0)}
+        hasBalance={withBalance.length > 0}
+      />
+    </>
+  );
+}
+
+function PrivacyBadge({ tx, today, partnerName }: { tx: Transaction; today: string; partnerName: string }) {
+  if (tx.surprise_until && tx.surprise_until >= today) return <VisibilityBadge kind="surprise" until={formatDayShort(tx.surprise_until)} />;
+  if (tx.free_money) return <span className="text-[12px] text-muted-foreground">Dinheiro livre · só total</span>;
+  if (tx.privacy === "hidden") return <VisibilityBadge kind="hidden" partnerName={partnerName} />;
+  if (tx.privacy === "category_only") return <VisibilityBadge kind="category_only" partnerName={partnerName} />;
+  return <span className="text-[12px] text-muted-foreground">{formatDayShort(tx.transaction_date)}</span>;
+}
+
+async function NossoHome({ userId, ctx, today, month, lowerMonth, historyStart }: { userId: string; ctx: Ctx; today: string; month: string; lowerMonth: string; historyStart: string }) {
+  const household = ctx.household!;
+  const partner = household.partner!;
+  const [budget, invoices, goals, pending, history, plans] = await Promise.all([
+    budgetOverview(household.id, ctx.facts, ctx.categories),
+    cardInvoices(household, ctx.accounts, today),
+    goalsOverview(household.id, today),
+    pendingApprovalsFor(household.id, userId),
+    loadSharedHistory(ctx.memberIds, historyStart, monthBounds(month).end),
+    loadSharedPlans(ctx.memberIds),
+  ]);
+  const shared = [
+    ...ctx.accounts.filter((a) => a.user_id === userId && a.visibility !== "private").map((a) => ({ id: a.id, name: a.name, owner: household.me.name, visibility: a.visibility as "totals" | "details", balance: a.balance_cents })),
+    ...partnerView(household, ctx.accounts, ctx.facts, today).map((v) => ({ id: v.id, name: v.name, owner: partner.name, visibility: v.visibility, balance: v.balanceCents })),
+  ];
+  const invoice = invoices.find((i) => i.items.length > 0) ?? invoices[0];
+  const activeGoals = goals.filter((g) => g.status === "active").slice(0, 2);
+  const people = household.me.color === "blue" ? [household.me, partner] : [partner, household.me];
+  const previousMonth = addMonths(`${month}-01`, -1).slice(0, 7);
+  const sharedBalance = shared.reduce((s, a) => s + (a.balance ?? 0), 0);
+
+  return (
+    <>
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-medium tracking-[-0.02em]">Nosso {lowerMonth}</h1>
+        <UpdatedAt at={ctx.syncedAt} />
+      </header>
+
+      {budget.lines.length > 0 ? (
+        <Link href="/couple/budget" className="block rounded-2xl border border-border bg-card p-5 text-foreground no-underline hover:text-foreground">
+          <span className="label-mono">Livre no orçamento do lar</span>
+          <p className={`tabular mt-2 text-[32px] font-medium tracking-[-0.03em] ${budget.freeCents < 0 ? "text-danger" : ""}`}>{formatBRL(budget.freeCents)}</p>
+          <p className="mt-1 text-[13px] text-muted-foreground">{formatBRL(budget.usedCents)} de {formatBRL(budget.limitCents)} usados · {daysLeftInMonth(today)} dias pela frente</p>
+        </Link>
+      ) : (
+        <Link href="/couple/budget/setup" className="flex min-h-14 items-center gap-3 rounded-2xl border border-dashed border-[#cdd0ca] bg-card/60 px-4 py-3 text-foreground no-underline hover:text-foreground">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-medium">Combinar o orçamento do lar</span>
+            <span className="block text-[13px] text-muted-foreground">Quanto vocês querem gastar juntos por mês</span>
+          </span>
+          <ChevronRightIcon className="size-4 text-muted-foreground" />
+        </Link>
+      )}
+
+      {pending[0] ? (
+        <Link href={`/couple/approvals/${pending[0].id}`} className="block rounded-2xl border border-border bg-card p-5 text-foreground no-underline hover:text-foreground">
+          <div className="flex items-center justify-between">
+            <span className="text-[15px] font-medium">{partner.name} quer combinar uma compra</span>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Pendente</span>
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {pending[0].title} · {formatBRL(pending[0].amount_cents)}{pending[0].installments > 1 ? ` em ${pending[0].installments}x` : ""}.
+            {household.approvalThresholdCents ? ` Acima do combinado de ${formatBRL(household.approvalThresholdCents)}.` : ""}
+          </p>
+          <span className="mt-3 inline-flex text-sm font-medium text-primary">Ver e responder</span>
+        </Link>
+      ) : null}
+
+      {invoice ? (
+        <Link href={`/cards?card=${invoice.card.id}`} className="block rounded-2xl border border-border bg-card p-5 text-foreground no-underline hover:text-foreground">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[15px] font-medium">Fatura {invoice.card.name}{invoice.card.card_last4 ? ` •• ${invoice.card.card_last4}` : ""}</span>
+            <Amount cents={Math.max(0, invoice.settlement.totalCents)} className="text-[15px]" />
+          </div>
+          <p className="text-[13px] text-muted-foreground">Vence {formatDayShort(invoice.period.due)}</p>
+          <div className="mt-3">
+            <SegmentBar
+              total={Math.max(1, invoice.settlement.totalCents)}
+              label="Fatura dividida entre Nosso, você e seu par"
+              segments={[
+                { value: invoice.settlement.oursCents, color: "var(--primary)" },
+                { value: invoice.holderIsMe ? invoice.settlement.holderCents : invoice.settlement.partnerCents, color: PERSON_BG[household.me.color] },
+                { value: invoice.holderIsMe ? invoice.settlement.partnerCents : invoice.settlement.holderCents, color: PERSON_BG[partner.color] },
+              ]}
+            />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-primary" />Nosso</span>
+            <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full" style={{ background: PERSON_BG[household.me.color] }} />{household.me.name}</span>
+            <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full" style={{ background: PERSON_BG[partner.color] }} />{partner.name}</span>
+          </div>
+          {invoice.settlement.partnerOwesCents > 0 ? (
+            <p className="mt-3 text-sm">
+              Acerto: {invoice.holderIsMe ? partner.name : household.me.name} → {invoice.holderIsMe ? household.me.name : partner.name} <span className="tabular font-medium">{formatBRL(invoice.settlement.partnerOwesCents)}</span>
+            </p>
+          ) : null}
+        </Link>
+      ) : null}
 
       <section className="grid gap-2">
-        <SectionHeader title="Recentes" action={<Link href={`/monthly/${month}`} className="flex min-h-11 items-center text-sm font-medium">Ver tudo</Link>} />
-        {recent.length > 0 ? <TransactionList transactions={recent} tags={tags} grouped={false} /> : (
-          <EmptyState title="Nenhuma movimentação">Toque em + para registrar, conecte um banco ou mande uma mensagem no WhatsApp.</EmptyState>
+        <SectionHeader title="Metas" action={<Link href="/couple/goals" className="flex min-h-11 items-center text-sm font-medium">{activeGoals.length ? "Ver todas" : "Criar"}</Link>} />
+        {activeGoals.length > 0 ? (
+          <div className="grid gap-3">
+            {activeGoals.map((g) => (
+              <Link key={g.id} href={`/couple/goals/${g.id}`} className="block rounded-2xl border border-border bg-card p-4 text-foreground no-underline hover:text-foreground">
+                <div className="flex items-center justify-between text-[15px] font-medium"><span>{g.name}</span><span className="tabular">{g.progress.percent}%</span></div>
+                <div className="mt-2">
+                  <SegmentBar total={g.targetCents} label={`${formatBRL(g.savedCents)} de ${formatBRL(g.targetCents)}`} segments={people.map((p) => ({ value: g.byUser[p.userId] ?? 0, color: PERSON_BG[p.color] }))} />
+                </div>
+                <p className="mt-2 text-[13px] text-muted-foreground">
+                  {formatBRL(g.savedCents)} de {formatBRL(g.targetCents)}
+                  {g.progress.reachMonth ? ` · no ritmo, chegam em ${formatMonthLong(g.progress.reachMonth).toLowerCase()}` : g.deadline ? "" : " · sem prazo"}
+                </p>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="Nenhuma meta ainda">Viagem, reserva, reforma: <Link href="/couple/goals/new">crie a primeira</Link>.</EmptyState>
         )}
       </section>
-    </div>
+
+      <Link href={`/couple/retro/${previousMonth}`} className="flex min-h-14 items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-foreground no-underline hover:text-foreground">
+        <CoupleAvatars people={people} size={28} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-medium">Retrospectiva de {monthName.format(new Date(`${previousMonth}-01T00:00:00Z`))}</span>
+          <span className="block text-[13px] text-muted-foreground">O mês de vocês, sem placar</span>
+        </span>
+        <ChevronRightIcon className="size-4 text-muted-foreground" />
+      </Link>
+
+      <section className="grid gap-2">
+        <SectionHeader title="Contas que vocês dividem" action={<Link href="/privacy/visibility" className="flex min-h-11 items-center text-sm font-medium">Visibilidade</Link>} />
+        {shared.length > 0 ? (
+          <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+            {shared.map((a) => (
+              <li key={a.id}>
+                <Link href={`/accounts/${a.id}`} className="flex min-h-16 items-center gap-3 px-4 py-3 text-foreground no-underline hover:text-foreground">
+                <InstitutionMark name={a.name} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-medium">{a.name} · {a.owner}</span>
+                  <span className="mt-1 block"><VisibilityBadge kind={a.visibility} /></span>
+                </span>
+                {a.balance !== null ? <Amount cents={Math.abs(a.balance)} className="text-[15px]" /> : null}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <p className="px-1 text-[13px] text-muted-foreground">Contas marcadas como “Só eu vejo” não aparecem aqui.</p>
+      </section>
+
+      <HomeAnalytics
+        month={month}
+        today={today}
+        history={history}
+        tags={plans.tags}
+        bills={plans.bills}
+        subscriptions={plans.subscriptions}
+        balanceCents={sharedBalance}
+        hasBalance={shared.some((a) => a.balance !== null)}
+      />
+    </>
   );
 }

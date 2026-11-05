@@ -23,6 +23,13 @@ export type PluggyAccount = {
   balance: number | null;
   currencyCode: string | null;
   itemId: string;
+  creditData?: {
+    creditLimit?: number | null;
+    availableCreditLimit?: number | null;
+    balanceCloseDate?: string | null;
+    balanceDueDate?: string | null;
+    brand?: string | null;
+  } | null;
 };
 
 export type PluggyTransaction = {
@@ -36,6 +43,7 @@ export type PluggyTransaction = {
   status?: "PENDING" | "POSTED";
   category?: string | null;
   merchant?: { name?: string | null; businessName?: string | null } | null;
+  creditCardMetadata?: { installmentNumber?: number | null; totalInstallments?: number | null; cardNumber?: string | null } | null;
 };
 
 export type PluggyItemResponse = {

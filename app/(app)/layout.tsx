@@ -1,17 +1,22 @@
 import Link from "next/link";
 
 import { BottomNav } from "@/components/app/bottom-nav";
+import { spaceColor } from "@/components/app/couple";
 import { PlusIcon } from "@/components/app/icons";
+import { getHousehold } from "@/lib/application/household";
 import { requireUser } from "@/lib/auth/session";
+import { currentSpace } from "@/lib/space";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  await requireUser();
+  const { user } = await requireUser();
+  const [household, space] = await Promise.all([getHousehold(user.id), currentSpace()]);
+  // The top rule tells where you are: your color in Meu, Prumo green in Nosso.
+  const rule = spaceColor(household?.partner ? space : "meu", household?.me.color ?? "blue");
   return (
     <div className="min-h-svh pb-[calc(9rem+env(safe-area-inset-bottom))]">
-      {/* Thin Prumo-green line at the top of every app screen, as in the designs. */}
-      <div aria-hidden="true" className="h-[3px] bg-primary" />
+      <div aria-hidden="true" className="h-[3px]" style={{ background: rule }} />
       <main className="mx-auto w-full max-w-2xl px-5 pt-[max(28px,env(safe-area-inset-top))]">{children}</main>
       <Link
         href="/transactions/new"

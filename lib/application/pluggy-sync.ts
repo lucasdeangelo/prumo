@@ -9,6 +9,7 @@ import { listRules, listTags } from "@/lib/repositories/reads";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { autoReconcileBills } from "./bills";
+import { applyRulesToRecent } from "./privacy";
 import { runSubscriptionDetection } from "./subscriptions";
 
 const INITIAL_DAYS = 365;
@@ -57,6 +58,7 @@ export async function syncItem(userId: string, pluggyItemId: string) {
     .eq("id", row.id);
 
   const accounts = await pluggy.listAccounts(pluggyItemId);
+  const syncStartedAt = new Date().toISOString();
   const [rules, tags] = await Promise.all([listRules(admin, userId), listTags(admin, userId)]);
   const today = todayIn();
   const from = row.last_sync_at ? addDays(instantToDate(row.last_sync_at as string), -OVERLAP_DAYS) : addDays(today, -INITIAL_DAYS);
@@ -72,10 +74,16 @@ export async function syncItem(userId: string, pluggyItemId: string) {
       balance_cents: balance === null ? null : account.type === "CREDIT" ? -Math.abs(balance) : balance,
       balance_synced_at: new Date().toISOString(),
       currency: account.currencyCode || "BRL",
+      institution: item.connector?.name && item.connector.name !== "MeuPluggy" ? item.connector.name : institutionFromName(account.name),
+      card_last4: lastFour(account.number),
+      credit_limit_cents: account.creditData?.creditLimit != null ? decimalToCents(account.creditData.creditLimit) : null,
+      available_limit_cents: account.creditData?.availableCreditLimit != null ? decimalToCents(account.creditData.availableCreditLimit) : null,
+      bill_close_date: account.creditData?.balanceCloseDate ? account.creditData.balanceCloseDate.slice(0, 10) : null,
+      bill_due_date: account.creditData?.balanceDueDate ? account.creditData.balanceDueDate.slice(0, 10) : null,
     };
     const { data: local } = await admin
       .from("accounts")
-      .select("id")
+      .select("id, import_enabled, partner_card_last4")
       .eq("user_id", userId)
       .eq("pluggy_item_id", row.id)
       .eq("pluggy_account_id", account.id)
@@ -92,6 +100,9 @@ export async function syncItem(userId: string, pluggyItemId: string) {
       if (error) throw new Error(`Falha ao salvar conta bancária: ${error.message}`);
       accountId = created.id as string;
     }
+    // The person chose not to bring this account (design: "não importar").
+    if (local && local.import_enabled === false) continue;
+    const partnerCard = (local?.partner_card_last4 as string | null | undefined) ?? null;
 
     const txs = await pluggy.listTransactions(account.id, from, addDays(today, 1));
     // Pending items may be re-issued with another id once posted; import only posted facts.
@@ -103,6 +114,7 @@ export async function syncItem(userId: string, pluggyItemId: string) {
         const merchant = tx.merchant?.businessName || tx.merchant?.name || null;
         const description = tx.description || tx.descriptionRaw || "";
         const category = categorize({ description, merchant, type, providerCategory: tx.category }, rules, tags);
+        const cardLast4 = lastFour(tx.creditCardMetadata?.cardNumber);
         return {
           account_id: accountId,
           pluggy_transaction_id: tx.id,
@@ -117,6 +129,11 @@ export async function syncItem(userId: string, pluggyItemId: string) {
           tag_id: category?.tagId ?? null,
           category_confidence: category?.confidence ?? null,
           category_source: category?.source ?? null,
+          card_last4: cardLast4,
+          installment_number: tx.creditCardMetadata?.installmentNumber ?? null,
+          installment_total: tx.creditCardMetadata?.totalInstallments ?? null,
+          // A purchase on the partner's additional card is theirs from the start.
+          scope: partnerCard && cardLast4 === partnerCard ? "partner" : "mine",
         };
       })
       .filter((tx) => tx.amount_cents > 0);
@@ -129,6 +146,7 @@ export async function syncItem(userId: string, pluggyItemId: string) {
   }
 
   await admin.from("pluggy_items").update({ last_sync_at: new Date().toISOString() }).eq("user_id", userId).eq("id", row.id);
+  await applyRulesToRecent(userId, from, syncStartedAt);
   await runSubscriptionDetection(userId);
   const { settled } = await autoReconcileBills(userId);
   return { accounts: accounts.length, imported, settled, status: item.status };
@@ -191,4 +209,16 @@ export async function disconnectItem(userId: string, pluggyItemId: string) {
   // History stays: accounts are archived, transactions keep their rows.
   await admin.from("accounts").update({ archived_at: now }).eq("user_id", userId).eq("pluggy_item_id", row.id);
   await admin.from("pluggy_items").update({ deleted_at: now, status: "DELETED" }).eq("user_id", userId).eq("id", row.id);
+}
+
+function lastFour(value: string | null | undefined): string | null {
+  const digits = (value ?? "").replace(/\D/g, "");
+  return digits.length >= 4 ? digits.slice(-4) : null;
+}
+
+/** MeuPluggy accounts carry the bank in their name ("Nu Pagamentos S.A. …"); keep a short label. */
+function institutionFromName(name: string): string | null {
+  const lower = name.toLowerCase();
+  const known: Array<[string, string]> = [["nu pagamentos", "Nubank"], ["nubank", "Nubank"], ["inter", "Inter"], ["itaú", "Itaú"], ["itau", "Itaú"], ["bradesco", "Bradesco"], ["santander", "Santander"], ["caixa", "Caixa"], ["banco do brasil", "Banco do Brasil"], ["c6", "C6 Bank"], ["xp", "XP"], ["btg", "BTG"], ["picpay", "PicPay"], ["mercado pago", "Mercado Pago"]];
+  return known.find(([key]) => lower.includes(key))?.[1] ?? null;
 }

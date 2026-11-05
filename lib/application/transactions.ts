@@ -5,6 +5,9 @@ import { normalizeMerchant } from "@/lib/domain/normalize";
 import { listRules, listTags } from "@/lib/repositories/reads";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { applyPrivacyRules } from "@/lib/domain/visibility";
+
+import { listPrivacyRules } from "./privacy";
 import { runSubscriptionDetection } from "./subscriptions";
 
 export type NewTransaction = {
@@ -14,6 +17,9 @@ export type NewTransaction = {
   date: string;
   tagId?: string | null;
   accountId?: string | null;
+  /** "De quem é": Meu (default) or Nosso, shared with the partner in full. */
+  scope?: "mine" | "ours";
+  freeMoney?: boolean;
 };
 
 export class DomainError extends Error {
@@ -64,6 +70,13 @@ export async function createTransaction(
     ? { tagId: input.tagId, confidence: 1, source: "user" }
     : await categorizeFor(userId, { description: input.description, type: input.type });
 
+  const scope = input.scope ?? "mine";
+  let privacy: "account" | "category_only" | "hidden" = "account";
+  if (scope === "mine") {
+    const rules = await listPrivacyRules(userId);
+    privacy = applyPrivacyRules({ tag_id: category?.tagId ?? null, account_id: input.accountId ?? null, label: input.description }, rules).privacy;
+  }
+
   const { data, error } = await admin
     .from("transactions")
     .insert({
@@ -80,6 +93,9 @@ export async function createTransaction(
       source: origin.source,
       external_reference: origin.externalReference ?? null,
       is_reviewed: origin.source === "manual",
+      scope,
+      privacy,
+      free_money: scope === "mine" ? Boolean(input.freeMoney) : false,
     })
     .select("id, tag_id")
     .single();
