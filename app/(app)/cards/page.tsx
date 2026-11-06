@@ -22,7 +22,8 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
   const { user } = await requireUser();
   const { household, cards } = await householdCards(user.id);
   const partner = household?.partner ?? null;
-  const syncedAt = await lastSyncAt([user.id, partner?.userId].filter(Boolean) as string[]);
+  const syncedAtIn = lastSyncAt([user.id, partner?.userId].filter(Boolean) as string[]);
+  syncedAtIn.catch(() => {});
 
   if (cards.length === 0) {
     return (
@@ -35,14 +36,24 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
     );
   }
 
-  const current = await Promise.all(cards.map((c) => loadInvoice(user.id, household, c, 0)));
   const selectedCard = cards.find((c) => c.id === cardParam) ?? cards[0];
+  const asked = Math.max(-12, Number(m ?? 0) || 0);
+  // Past and open invoices need no limit from the bank's schedule, so they all load at once.
+  const early = asked <= 0;
+  const load = (offset: number) => loadInvoice(user.id, household, selectedCard, offset);
+  const [current, syncedAt, earlySelected, earlyPrevious] = await Promise.all([
+    Promise.all(cards.map((c) => loadInvoice(user.id, household, c, 0))),
+    syncedAtIn,
+    early && asked !== 0 ? load(asked) : Promise.resolve(null),
+    early ? Promise.all([-1, -2].map((o) => load(o + asked))) : Promise.resolve(null),
+  ]);
   const openInvoice = current.find((i) => i.card.id === selectedCard.id)!;
   // Future invoices exist as far as the bank has scheduled installments.
   const futureCount = Math.max(1, openInvoice.installmentsAhead.length);
-  const offset = Math.max(-12, Math.min(futureCount, Number(m ?? 0) || 0));
-  const selected = offset === 0 ? current.find((i) => i.card.id === selectedCard.id)! : await loadInvoice(user.id, household, selectedCard, offset);
-  const previous = await Promise.all([-1, -2].map((o) => loadInvoice(user.id, household, selectedCard, o + offset)));
+  const offset = Math.min(futureCount, asked);
+  const [selected, previous] = early
+    ? [earlySelected ?? openInvoice, earlyPrevious!]
+    : await Promise.all([offset === 0 ? openInvoice : load(offset), Promise.all([-1, -2].map((o) => load(o + offset)))]);
 
   // Closed invoices show the bank's total; the open one is what came in so far plus the unpaid rest.
   const amountOf = (inv: (typeof current)[number]) => Math.max(0, inv.totalCents);

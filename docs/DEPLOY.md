@@ -182,5 +182,6 @@ O Supabase Cloud passa a ser o banco de **produção**. Para desenvolver sem mex
 
 ## Limites conhecidos
 
-- O limite de tentativas (convite, vínculo do WhatsApp) fica na memória do app. Com um container, isso basta. Para rodar mais de uma réplica, o limite precisa ir para o banco.
+- O limite de tentativas (convite, vínculo do WhatsApp) e os dados do casal (guardados por 1 minuto para acelerar as páginas) ficam na memória do app. Com um container, isso basta. Para rodar mais de uma réplica, os dois precisam ir para o banco.
+- O projeto do Supabase está em `ca-central-1` (Canadá): cada consulta leva de 150 a 450 ms a partir do Brasil. Em `sa-east-1` (São Paulo) seria de 20 a 50 ms.
 - O plano gratuito do MeuPluggy cobre só os dados do próprio titular: cada pessoa do casal conecta o seu.

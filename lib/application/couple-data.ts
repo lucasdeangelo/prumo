@@ -11,6 +11,8 @@ import { freeMoneyAllowance, getHousehold, type Household } from "./household";
 
 // Every query below filters by the household's own member ids, never by client input.
 
+type Awaitable<T> = T | Promise<T>;
+
 export type FactRow = {
   id: string;
   user_id: string;
@@ -147,8 +149,9 @@ export function sharedSpendingByCategory(facts: FactRow[], categories: Map<strin
   return totals;
 }
 
-export async function budgetOverview(householdId: string, facts: FactRow[], categories: Map<string, { name: string; excluded: boolean }>) {
-  const budgets = await loadBudgets(householdId);
+/** `facts` and `categories` may still be loading: the budget query runs alongside them. */
+export async function budgetOverview(householdId: string, factsIn: Awaitable<FactRow[]>, categoriesIn: Awaitable<Map<string, { name: string; excluded: boolean }>>) {
+  const [budgets, facts, categories] = await Promise.all([loadBudgets(householdId), factsIn, categoriesIn]);
   const spent = sharedSpendingByCategory(facts, categories);
   const lines = budgets.map((b) => budgetStatus({ category: b.category, limitCents: b.limitCents, spentCents: spent[b.category] ?? 0 }));
   const limit = lines.reduce((s, l) => s + l.limitCents, 0);
@@ -192,8 +195,9 @@ export async function goalsOverview(householdId: string, today: string) {
 }
 
 /** The shared view of every card account in the household for the open invoice. */
-export async function cardInvoices(household: Household, accounts: AccountRow[], today: string) {
+export async function cardInvoices(household: Household, accountsIn: Awaitable<AccountRow[]>, today: string) {
   const memberIds = [household.me.userId, household.partner?.userId].filter(Boolean) as string[];
+  const accounts = await accountsIn;
   const cards = accounts.filter((a) => a.type === "CREDIT" && (a.user_id === household.me.userId || a.visibility !== "private"));
   if (cards.length === 0) return [];
   const [rules, categories, windows] = await Promise.all([
@@ -271,10 +275,15 @@ const PENDING_COLUMNS = "id, bill_month, transaction_date, description, amount_c
  */
 export async function resolveInvoice(card: AccountRow, offset: number, today: string): Promise<InvoiceWindow> {
   const admin = createAdminClient();
-  const [{ data: bills }, { data: latest }, { data: pendingRows }] = await Promise.all([
+  // The open invoice is this month's or one of its neighbours; fetching those items now, next
+  // to the metadata, saves a round trip. Anything outside the guess is fetched afterwards.
+  const guess = addMonthKey(today.slice(0, 7), offset);
+  const guessed = [-1, 0, 1, 2].map((d) => addMonthKey(guess, d));
+  const [{ data: bills }, { data: latest }, { data: pendingRows }, guessedFacts] = await Promise.all([
     admin.from("card_bills").select("bill_month, due_date, total_cents, payments_cents").eq("account_id", card.id).eq("user_id", card.user_id).order("bill_month", { ascending: false }).limit(24),
     admin.from("transactions").select("bill_month").eq("account_id", card.id).eq("user_id", card.user_id).not("bill_month", "is", null).is("deleted_at", null).order("bill_month", { ascending: false }).limit(1),
     admin.from("card_pending_items").select(PENDING_COLUMNS).eq("account_id", card.id).eq("user_id", card.user_id).order("transaction_date", { ascending: false }).limit(1000),
+    billFacts(card, guessed),
   ]);
   const closed = (bills ?? []) as Array<{ bill_month: string; due_date: string; total_cents: number; payments_cents: number }>;
   const latestAssigned = (latest ?? []).map((r) => r.bill_month as string);
@@ -288,17 +297,9 @@ export async function resolveInvoice(card: AccountRow, offset: number, today: st
     const status = bill || month < open ? "closed" : month === open ? "open" : "future";
     const usualDue = card.bill_due_date ?? closed[0]?.due_date ?? null;
     const due = dueDateFor(month, bill?.due_date ?? null, usualDue);
-    const { data, error } = await admin
-      .from("transactions")
-      .select(FACT_COLUMNS)
-      .eq("account_id", card.id)
-      .eq("user_id", card.user_id)
-      .eq("bill_month", month)
-      .is("deleted_at", null)
-      .order("transaction_date", { ascending: false })
-      .limit(2000);
-    if (error) throw new Error(`Falha ao carregar a fatura: ${error.message}`);
-    const facts = (data ?? []) as FactRow[];
+    // The API returns at most 1000 rows: a full guess may be cut, so ask for the one month then.
+    const usable = guessed.includes(month) && guessedFacts.length < 1000;
+    const facts = usable ? guessedFacts.filter((f) => f.bill_month === month) : await billFacts(card, [month]);
     // Stale pending items of invoices already closed are ignored.
     const pendingHere = status === "closed" ? [] : allPending.filter((p) => p.bill_month === month);
     const kept = new Set(
@@ -352,6 +353,21 @@ export async function resolveInvoice(card: AccountRow, offset: number, today: st
   };
 }
 
+/** Items of a card assigned by the bank to the given invoice months. */
+async function billFacts(card: AccountRow, months: string[]): Promise<FactRow[]> {
+  const { data, error } = await createAdminClient()
+    .from("transactions")
+    .select(FACT_COLUMNS)
+    .eq("account_id", card.id)
+    .eq("user_id", card.user_id)
+    .in("bill_month", months)
+    .is("deleted_at", null)
+    .order("transaction_date", { ascending: false })
+    .limit(2000);
+  if (error) throw new Error(`Falha ao carregar a fatura: ${error.message}`);
+  return (data ?? []) as FactRow[];
+}
+
 /** Invoice window: from the last close date (exclusive) to the next close date (inclusive). */
 export function invoicePeriod(card: Pick<AccountRow, "bill_close_date" | "bill_due_date">, today: string) {
   if (!card.bill_close_date) {
@@ -374,8 +390,8 @@ function alignDue(due: string, close: string): string {
   return aligned;
 }
 
-export async function freeMoneyFor(household: Household, userId: string, facts: FactRow[], month: string) {
-  const allowance = await freeMoneyAllowance(household.id, userId, monthBounds(month).end);
+export async function freeMoneyFor(household: Household, userId: string, factsIn: Awaitable<FactRow[]>, month: string) {
+  const [allowance, facts] = await Promise.all([freeMoneyAllowance(household.id, userId, monthBounds(month).end), factsIn]);
   if (allowance === null) return null;
   const used = facts.filter((f) => f.user_id === userId && f.free_money && f.type === "debit").reduce((s, f) => s + f.amount_cents, 0);
   return freeMoneyStatus(allowance, used, month);

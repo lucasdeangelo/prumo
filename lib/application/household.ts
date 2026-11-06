@@ -51,18 +51,53 @@ function toMember(row: { user_id: string; color: string; monthly_income_cents: n
   };
 }
 
-/** The household of a user (with both members), or null when they are on their own. Cached per request. */
+type HouseholdEmbed = {
+  id: string;
+  default_split: Household["defaultSplit"];
+  budget_alerts: boolean;
+  approval_threshold_cents: number | null;
+  created_at: string;
+  household_members: Array<{ user_id: string; color: string; monthly_income_cents: number | null; pix_key: string | null; profiles: { display_name: string | null } | null }>;
+};
+
+// Every page needs the household and it rarely changes, so this server keeps it for a minute.
+// Every write to it below calls forgetHouseholds(); `generation` keeps a read that started
+// before a write from storing the old value. Assumes one app process (docs/DEPLOY.md).
+const HOUSEHOLD_TTL_MS = 60_000;
+const recentHouseholds = new Map<string, { until: number; value: Household | null }>();
+let generation = 0;
+
+/** Drops the remembered households. Call after any change to households, members or their settings. */
+export function forgetHouseholds() {
+  generation += 1;
+  recentHouseholds.clear();
+}
+
+/** The household of a user (with both members), or null when they are on their own. */
 export const getHousehold = cache(async (userId: string): Promise<Household | null> => {
-  const admin = createAdminClient();
-  const { data: mine } = await admin.from("household_members").select("household_id").eq("user_id", userId).maybeSingle();
-  if (!mine) return null;
-  const [{ data: household }, { data: members }] = await Promise.all([
-    admin.from("households").select("id, default_split, budget_alerts, approval_threshold_cents, created_at").eq("id", mine.household_id).single(),
-    admin.from("household_members").select("user_id, color, monthly_income_cents, pix_key").eq("household_id", mine.household_id),
-  ]);
-  if (!household || !members) return null;
-  const { data: profiles } = await admin.from("profiles").select("id, display_name").in("id", members.map((m) => m.user_id));
-  const names = new Map((profiles ?? []).map((p) => [p.id as string, p.display_name as string | null]));
+  const hit = recentHouseholds.get(userId);
+  if (hit && hit.until > Date.now()) return hit.value;
+  const started = generation;
+  const value = await fetchHousehold(userId);
+  if (started === generation) {
+    if (recentHouseholds.size > 1000) recentHouseholds.clear();
+    recentHouseholds.set(userId, { until: Date.now() + HOUSEHOLD_TTL_MS, value });
+  }
+  return value;
+});
+
+async function fetchHousehold(userId: string): Promise<Household | null> {
+  // One round trip: my membership, the household, both members and their names.
+  const { data, error } = await createAdminClient()
+    .from("household_members")
+    .select("households(id, default_split, budget_alerts, approval_threshold_cents, created_at, household_members(user_id, color, monthly_income_cents, pix_key, profiles(display_name)))")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(`Falha ao carregar o casal: ${error.message}`);
+  const household = (data as { households: HouseholdEmbed | null } | null)?.households;
+  if (!household) return null;
+  const members = household.household_members;
+  const names = new Map(members.map((m) => [m.user_id, m.profiles?.display_name ?? null]));
   const meRow = members.find((m) => m.user_id === userId)!;
   const partnerRow = members.find((m) => m.user_id !== userId);
   const me = toMember(meRow, names.get(userId) ?? null);
@@ -77,7 +112,7 @@ export const getHousehold = cache(async (userId: string): Promise<Household | nu
     myShare: firstShare(household.default_split as SplitMethod, [me.incomeCents, partner?.incomeCents ?? null]),
     createdAt: household.created_at,
   };
-});
+}
 
 /** Starts a household for a person on their own (idempotent). */
 export async function ensureHousehold(userId: string): Promise<string> {
@@ -92,6 +127,7 @@ export async function ensureHousehold(userId: string): Promise<string> {
     if (memberError.code === "23505") return ensureHousehold(userId);
     throw new Error(`Falha ao entrar na casa: ${memberError.message}`);
   }
+  forgetHouseholds();
   return household.id as string;
 }
 
@@ -134,6 +170,7 @@ export async function joinHousehold(userId: string, code: string) {
   }
 
   const { error } = await admin.from("household_members").insert({ household_id: invite.household_id, user_id: userId, color: "terracotta" });
+  forgetHouseholds();
   if (error) {
     throw new DomainError(error.code === "23514" || error.code === "23505" ? "Essa casa já está completa." : "Não foi possível entrar na casa.");
   }
@@ -153,6 +190,7 @@ export async function leaveHousehold(userId: string) {
   const { data: members } = await admin.from("household_members").select("user_id").eq("household_id", member.household_id);
   const ids = (members ?? []).map((m) => m.user_id as string);
   await admin.from("household_members").delete().eq("household_id", member.household_id);
+  forgetHouseholds();
   await admin.from("household_invites").delete().eq("household_id", member.household_id).is("used_at", null);
   await admin.from("household_proposals").update({ status: "withdrawn", decided_at: new Date().toISOString(), decided_by: userId }).eq("household_id", member.household_id).eq("status", "pending");
   for (const id of ids) {
@@ -167,6 +205,7 @@ export async function updateMember(userId: string, patch: { incomeCents?: number
   if (patch.incomeCents !== undefined) update.monthly_income_cents = patch.incomeCents;
   if (patch.pixKey !== undefined) update.pix_key = patch.pixKey;
   const { error } = await createAdminClient().from("household_members").update(update).eq("user_id", userId);
+  forgetHouseholds();
   if (error) throw new Error(`Falha ao salvar: ${error.message}`);
 }
 
@@ -224,8 +263,10 @@ async function applyProposal(householdId: string, kind: ProposalKind, payload: R
   const admin = createAdminClient();
   if (kind === "approval_threshold") {
     await admin.from("households").update({ approval_threshold_cents: (payload.amountCents as number | null) ?? null }).eq("id", householdId);
+    forgetHouseholds();
   } else if (kind === "split") {
     await admin.from("households").update({ default_split: payload.defaultSplit }).eq("id", householdId);
+    forgetHouseholds();
     const rules = (payload.rules as Array<{ category: string; method: string; fixedShare?: number | null }> | undefined) ?? [];
     await admin.from("split_rules").delete().eq("household_id", householdId);
     if (rules.length) {

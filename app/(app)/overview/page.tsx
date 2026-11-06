@@ -5,6 +5,7 @@ import { CoupleAvatars, InstitutionMark, SegmentBar, SpaceSwitcher, UpdatedAt, V
 import { BalanceCard, HomeAnalytics } from "@/components/app/home-analytics";
 import { ChevronRightIcon } from "@/components/app/icons";
 import { Card, EmptyState } from "@/components/ui/card";
+import { getHousehold } from "@/lib/application/household";
 import { requireUser } from "@/lib/auth/session";
 import {
   budgetOverview,
@@ -33,8 +34,10 @@ export default async function OverviewPage() {
   const today = todayIn();
   const month = monthOf(today);
   const historyStart = monthBounds(addMonths(`${month}-01`, -5).slice(0, 7)).start;
-  const [ctx, space] = await Promise.all([loadCoupleContext(user.id, month), currentSpace()]);
-  const { household } = ctx;
+  // Started here and awaited inside each home together with its own queries.
+  const ctx = loadCoupleContext(user.id, month);
+  ctx.catch(() => {}); // awaited below; this only keeps an unused failure (invite card) from going unhandled
+  const [household, space] = await Promise.all([getHousehold(user.id), currentSpace()]);
   const me = household?.me ?? { userId: user.id, name: user.name?.split(" ")[0] ?? "Você", initial: (user.name ?? "V").charAt(0).toUpperCase(), color: "blue" as const, incomeCents: null, pixKey: null };
   const partner = household?.partner ?? null;
   const shownSpace = space === "nosso" ? "nosso" : "meu";
@@ -45,18 +48,19 @@ export default async function OverviewPage() {
       <SpaceSwitcher space={shownSpace} me={me} partner={partner} returnTo="/overview" />
       {shownSpace === "nosso" ? (
         partner && household ? (
-          <NossoHome userId={user.id} ctx={ctx} today={today} month={month} lowerMonth={lowerMonth} historyStart={historyStart} />
+          <NossoHome userId={user.id} household={household} ctxIn={ctx} today={today} month={month} lowerMonth={lowerMonth} historyStart={historyStart} />
         ) : (
           <InviteCard />
         )
       ) : (
-        <MeuHome userId={user.id} db={db} ctx={ctx} today={today} month={month} lowerMonth={lowerMonth} historyStart={historyStart} meName={me.name} />
+        <MeuHome userId={user.id} db={db} household={household} ctxIn={ctx} today={today} month={month} lowerMonth={lowerMonth} historyStart={historyStart} meName={me.name} />
       )}
     </div>
   );
 }
 
 type Ctx = Awaited<ReturnType<typeof loadCoupleContext>>;
+type HouseholdData = NonNullable<Awaited<ReturnType<typeof getHousehold>>>;
 
 function InviteCard() {
   return (
@@ -73,16 +77,16 @@ function InviteCard() {
   );
 }
 
-async function MeuHome({ userId, db, ctx, today, month, lowerMonth, historyStart, meName }: { userId: string; db: Parameters<typeof listTags>[0]; ctx: Ctx; today: string; month: string; lowerMonth: string; historyStart: string; meName: string }) {
-  const { household } = ctx;
+async function MeuHome({ userId, db, household, ctxIn, today, month, lowerMonth, historyStart, meName }: { userId: string; db: Parameters<typeof listTags>[0]; household: HouseholdData | null; ctxIn: Promise<Ctx>; today: string; month: string; lowerMonth: string; historyStart: string; meName: string }) {
   const hasPartner = Boolean(household?.partner);
-  const [tags, accounts, history, bills, subscriptions, freeMoney, pending] = await Promise.all([
+  const [ctx, tags, accounts, history, bills, subscriptions, freeMoney, pending] = await Promise.all([
+    ctxIn,
     listTags(db, userId),
     listAccounts(db, userId),
     listTransactions(db, userId, { from: historyStart, to: monthBounds(month).end, limit: 5000 }),
     listBills(db, userId, { status: ["pending", "overdue"] }),
     listSubscriptions(db, userId),
-    household ? freeMoneyFor(household, userId, ctx.facts, month) : Promise.resolve(null),
+    household ? freeMoneyFor(household, userId, ctxIn.then((c) => c.facts), month) : Promise.resolve(null),
     household ? pendingApprovalsFor(household.id, userId) : Promise.resolve([]),
   ]);
   // In Meu, what is marked "Nosso" lives in the shared space.
@@ -192,16 +196,17 @@ function PrivacyBadge({ tx, today, partnerName }: { tx: Transaction; today: stri
   return <span className="text-[12px] text-muted-foreground">{formatDayShort(tx.transaction_date)}</span>;
 }
 
-async function NossoHome({ userId, ctx, today, month, lowerMonth, historyStart }: { userId: string; ctx: Ctx; today: string; month: string; lowerMonth: string; historyStart: string }) {
-  const household = ctx.household!;
+async function NossoHome({ userId, household, ctxIn, today, month, lowerMonth, historyStart }: { userId: string; household: HouseholdData; ctxIn: Promise<Ctx>; today: string; month: string; lowerMonth: string; historyStart: string }) {
   const partner = household.partner!;
-  const [budget, invoices, goals, pending, history, plans] = await Promise.all([
-    budgetOverview(household.id, ctx.facts, ctx.categories),
-    cardInvoices(household, ctx.accounts, today),
+  const memberIds = [household.me.userId, partner.userId];
+  const [ctx, budget, invoices, goals, pending, history, plans] = await Promise.all([
+    ctxIn,
+    budgetOverview(household.id, ctxIn.then((c) => c.facts), ctxIn.then((c) => c.categories)),
+    cardInvoices(household, ctxIn.then((c) => c.accounts), today),
     goalsOverview(household.id, today),
     pendingApprovalsFor(household.id, userId),
-    loadSharedHistory(ctx.memberIds, historyStart, monthBounds(month).end),
-    loadSharedPlans(ctx.memberIds),
+    loadSharedHistory(memberIds, historyStart, monthBounds(month).end),
+    loadSharedPlans(memberIds),
   ]);
   const shared = [
     ...ctx.accounts.filter((a) => a.user_id === userId && a.visibility !== "private").map((a) => ({ id: a.id, name: a.name, institution: a.institution, owner: household.me.name, visibility: a.visibility as "totals" | "details", balance: a.balance_cents })),

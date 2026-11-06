@@ -6,7 +6,7 @@ import { formatBRL } from "@/lib/domain/money";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { budgetOverview, loadCategoryNames, loadFacts, sharedSpendingByCategory } from "./couple-data";
-import { getHousehold, type Household } from "./household";
+import { forgetHouseholds, getHousehold, type Household } from "./household";
 import { DomainError } from "./transactions";
 
 // ---------- Notifications to the couple (WhatsApp outbox, deduplicated) ----------
@@ -81,6 +81,7 @@ export async function setBudgetAlerts(userId: string, enabled: boolean) {
   const household = await getHousehold(userId);
   if (!household) throw new DomainError("Você ainda não tem uma casa no Prumo.");
   await createAdminClient().from("households").update({ budget_alerts: enabled }).eq("id", household.id);
+  forgetHouseholds();
 }
 
 // ---------- Goals ----------

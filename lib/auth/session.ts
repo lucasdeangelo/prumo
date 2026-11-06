@@ -23,10 +23,16 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   };
 });
 
-/** Ensures profile and default tags exist once per request. Idempotent in the database. */
+// People already prepared by this server process. ensure_profile is idempotent, so
+// a restart only means one extra call; skipping it saves a database round trip per page.
+const onboarded = new Set<string>();
+
+/** Ensures profile and default tags exist. Idempotent in the database; runs once per person per process. */
 const ensureOnboarded = cache(async (user: SessionUser) => {
+  if (onboarded.has(user.id) && !user.inviteCode) return;
   const { error } = await createAdminClient().rpc("ensure_profile", { p_user: user.id, p_display_name: user.name });
   if (error) throw new Error(`Falha ao preparar o perfil: ${error.message}`);
+  onboarded.add(user.id);
   // Signed up with the partner's invite: join their household once, then forget the code.
   if (user.inviteCode) {
     const { getHousehold, joinHousehold } = await import("@/lib/application/household");

@@ -55,10 +55,12 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
   const ours = Boolean(partner) && aba === "nossas";
   const memberIds = [user.id, partner?.userId].filter(Boolean) as string[];
   // Minhas: mine only. Nossas: what either of us marked as the couple's.
-  const subs = ours
-    ? (await loadSharedPlans(memberIds)).subscriptions
-    : (await listSubscriptions(db, user.id)).filter((s) => !partner || s.scope !== "ours");
-  const syncedAt = await lastSyncAt(memberIds);
+  const [subs, syncedAt] = await Promise.all([
+    ours
+      ? loadSharedPlans(memberIds).then((p) => p.subscriptions)
+      : listSubscriptions(db, user.id).then((list) => list.filter((s) => !partner || s.scope !== "ours")),
+    lastSyncAt(memberIds),
+  ]);
   const active = subs.filter((s) => s.status === "active" || s.status === "paused");
   const candidates = subs.filter((s) => s.status === "candidate");
   const past = subs.filter((s) => s.status === "cancelled");

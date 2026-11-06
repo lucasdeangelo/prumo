@@ -37,6 +37,11 @@ export default async function MonthPage({ params, searchParams }: { params: Prom
   const partner = household?.partner ?? null;
   const nosso = Boolean(partner) && space === "nosso";
   const memberIds = [user.id, partner?.userId].filter(Boolean) as string[];
+  // Started now so they load alongside the month's movements.
+  const overdraftIn = nosso ? Promise.resolve([]) : overdraftFor(user.id, month);
+  const syncedAtIn = month === monthOf(today) ? lastSyncAt(memberIds) : Promise.resolve(null);
+  overdraftIn.catch(() => {});
+  syncedAtIn.catch(() => {});
 
   // Meu: my own facts (what is Nosso lives in the shared space). Nosso: what both marked as Nosso.
   const [tags, transactions, previous, openBills] = nosso
@@ -58,7 +63,7 @@ export default async function MonthPage({ params, searchParams }: { params: Prom
   const monthBills = month >= current ? openBills : [];
 
   const summary = summarizeMonth(transactions, tags, month);
-  const overdraft = nosso ? [] : await overdraftFor(user.id, month);
+  const [overdraft, syncedAt] = await Promise.all([overdraftIn, syncedAtIn]);
   const previousSummary = summarizeMonth(previous, tags, prev);
   const isCurrent = month === current;
   const todayDay = Number(today.slice(8, 10));
@@ -97,7 +102,7 @@ export default async function MonthPage({ params, searchParams }: { params: Prom
       />
       {household ? <SpaceSwitcher space={nosso ? "nosso" : "meu"} me={household.me} partner={partner} returnTo={`/monthly/${month}`} /> : null}
       <MonthSwitcher label={formatMonthLong(month)} prevHref={`/monthly/${prev}`} nextHref={month < current ? `/monthly/${next}` : undefined} />
-      {month === current ? <UpdatedAt at={await lastSyncAt(memberIds)} /> : null}
+      {month === current ? <UpdatedAt at={syncedAt} /> : null}
 
       <section className="flex flex-col gap-4 rounded-2xl bg-primary p-5 text-primary-foreground">
         <div className="flex flex-col gap-1.5">

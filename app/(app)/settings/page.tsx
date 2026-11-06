@@ -42,13 +42,13 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 
 export default async function SettingsPage() {
   const { user, db } = await requireUser();
+  // What depends only on me starts together with the household lookup.
+  const mine = Promise.all([loadAccounts([user.id]), listPrivacyRules(user.id), listConnections(user.id), getWhatsappLink(db, user.id)]);
+  mine.catch(() => {});
   const household = await getHousehold(user.id);
   const partner = household?.partner ?? null;
-  const [accounts, rules, connections, link, budgets, proposals, splitRules, freeMine] = await Promise.all([
-    loadAccounts([user.id]),
-    listPrivacyRules(user.id),
-    listConnections(user.id),
-    getWhatsappLink(db, user.id),
+  const [[accounts, rules, connections, link], budgets, proposals, splitRules, freeMine] = await Promise.all([
+    mine,
     household ? loadBudgets(household.id) : Promise.resolve([]),
     household ? listProposals(household.id) : Promise.resolve([]),
     household ? loadSplitRules(household.id) : Promise.resolve(new Map()),

@@ -16,7 +16,8 @@ const ITEMS = [
   { href: "/settings", label: "Ajustes", icon: SlidersIcon, match: ["/settings"] },
 ];
 
-export function BottomNav() {
+/** `month` (AAAA-MM) points Mês straight at the current month, skipping a redirect. */
+export function BottomNav({ month }: { month: string }) {
   const pathname = usePathname();
   return (
     <nav aria-label="Navegação principal" className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
@@ -26,7 +27,7 @@ export function BottomNav() {
           return (
             <li key={href}>
               <Link
-                href={href}
+                href={href === "/monthly" ? `/monthly/${month}` : href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex min-h-[52px] flex-col items-center justify-center gap-1 text-[11px] no-underline",

@@ -1,22 +1,24 @@
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { BottomNav } from "@/components/app/bottom-nav";
 import { spaceColor } from "@/components/app/couple";
 import { PlusIcon } from "@/components/app/icons";
 import { getHousehold } from "@/lib/application/household";
 import { requireUser } from "@/lib/auth/session";
+import { monthOf, todayIn } from "@/lib/domain/dates";
 import { currentSpace } from "@/lib/space";
 
 export const dynamic = "force-dynamic";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { user } = await requireUser();
-  const [household, space] = await Promise.all([getHousehold(user.id), currentSpace()]);
-  // The top rule tells where you are: your color in Meu, Prumo green in Nosso.
-  const rule = spaceColor(household?.partner ? space : "meu", household?.me.color ?? "blue");
+// The layout itself waits on nothing, so the frame and the page's loading state show at once.
+// Every page verifies the user on its own (requireUser).
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-svh pb-[calc(9rem+env(safe-area-inset-bottom))]">
-      <div aria-hidden="true" className="h-[3px]" style={{ background: rule }} />
+      <Suspense fallback={<div aria-hidden="true" className="h-[3px]" />}>
+        <SpaceRule />
+      </Suspense>
       <main className="mx-auto w-full max-w-2xl px-5 pt-[max(28px,env(safe-area-inset-top))]">{children}</main>
       <Link
         href="/transactions/new"
@@ -25,7 +27,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       >
         <PlusIcon className="size-6" strokeWidth={1.8} />
       </Link>
-      <BottomNav />
+      <BottomNav month={monthOf(todayIn())} />
     </div>
   );
+}
+
+/** The top rule tells where you are: your color in Meu, Prumo green in Nosso. */
+async function SpaceRule() {
+  const { user } = await requireUser();
+  const [household, space] = await Promise.all([getHousehold(user.id), currentSpace()]);
+  const rule = spaceColor(household?.partner ? space : "meu", household?.me.color ?? "blue");
+  return <div aria-hidden="true" className="h-[3px]" style={{ background: rule }} />;
 }

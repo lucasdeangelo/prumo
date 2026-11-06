@@ -35,10 +35,14 @@ export type InvoiceLine = {
 /** One card invoice (period containing `ref`, shifted by `offset` months) as the viewer may see it. */
 export async function loadInvoice(viewerId: string, household: Household | null, card: AccountRow, offset = 0) {
   const today = todayIn();
-  const [window, categories, rules] = await Promise.all([
+  const [window, categories, rules, settlements] = await Promise.all([
     resolveInvoice(card, offset, today),
     loadCategoryNames([card.user_id]),
     household ? loadSplitRules(household.id) : Promise.resolve(new Map()),
+    // All settlements of this card (a few rows), so the invoice month is not needed first.
+    household
+      ? createAdminClient().from("settlements").select("reference, amount_cents, settled_at").eq("household_id", household.id).eq("kind", "invoice").like("reference", `${card.id}:%`).then((r) => r.data ?? [])
+      : Promise.resolve([]),
   ]);
   const { period, items, paymentsCents, carriedCents, totalCents } = window;
   const holderIsViewer = card.user_id === viewerId;
@@ -85,11 +89,9 @@ export async function loadInvoice(viewerId: string, household: Household | null,
     const remaining = fact.installment_total - fact.installment_number;
     for (let i = 0; i < remaining; i += 1) ahead[i] = (ahead[i] ?? 0) + fact.amount_cents;
   }
-  const settledRow = household
-    ? (await createAdminClient().from("settlements").select("amount_cents, settled_at").eq("household_id", household.id).eq("kind", "invoice").eq("reference", `${card.id}:${period.month}`).maybeSingle()).data
-    : null;
+  const settledRow = settlements.find((r) => r.reference === `${card.id}:${period.month}`) ?? null;
 
-  return { card, period, lines, pendingLines, cancelledLines, settlement, holderTotals, holderIsViewer, installmentsAhead: ahead, paymentsCents, carriedCents, totalCents, settled: settledRow as { amount_cents: number; settled_at: string } | null };
+  return { card, period, lines, pendingLines, cancelledLines, settlement, holderTotals, holderIsViewer, installmentsAhead: ahead, paymentsCents, carriedCents, totalCents, settled: settledRow ? { amount_cents: settledRow.amount_cents as number, settled_at: settledRow.settled_at as string } : null };
 }
 
 /** Changes whose a purchase is ("Nosso", the holder's or the partner's). Either person may do it for lines they see. */
