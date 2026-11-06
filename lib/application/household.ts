@@ -6,7 +6,7 @@ import { cache } from "react";
 
 import { firstShare, type SplitMethod } from "@/lib/domain/couple";
 import { requireServerEnv } from "@/lib/env.server";
-import { hmacHex } from "@/lib/internal/auth";
+import { hmacHex, rateLimit } from "@/lib/internal/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { DomainError } from "./transactions";
@@ -111,6 +111,8 @@ export async function createInvite(userId: string) {
 
 /** Joins the inviter's household. A person alone in their own household moves over (their data stays theirs). */
 export async function joinHousehold(userId: string, code: string) {
+  // 10 tries per 15 minutes per person on top of 32^8 codes that expire in 7 days.
+  if (!rateLimit(`household-join:${userId}`, 10, 15 * 60_000)) throw new DomainError("Muitas tentativas. Tente de novo em 15 minutos.");
   const admin = createAdminClient();
   const { data: invite } = await admin
     .from("household_invites")
@@ -140,18 +142,24 @@ export async function joinHousehold(userId: string, code: string) {
 }
 
 /**
- * Leaves the household. Each person keeps their own facts; what was marked "Nosso" stays with whoever
- * recorded it (it simply stops being shared). Shared plans of a household that empties are removed.
+ * Leaving ends the shared space for both. The old household keeps its history (goals, combinados,
+ * settle-ups) but nobody belongs to it anymore, so a future partner of either person never sees it.
+ * Each person keeps their own facts; what was "Nosso" stops being shared.
  */
 export async function leaveHousehold(userId: string) {
   const admin = createAdminClient();
   const { data: member } = await admin.from("household_members").select("household_id").eq("user_id", userId).maybeSingle();
   if (!member) return;
-  await admin.from("household_members").delete().eq("user_id", userId);
-  const { count } = await admin.from("household_members").select("user_id", { count: "exact", head: true }).eq("household_id", member.household_id);
-  if ((count ?? 0) === 0) await admin.from("households").delete().eq("id", member.household_id);
-  // Nothing of the other person stays readable: shared facts go back to "mine" for their owner.
-  await admin.from("transactions").update({ scope: "mine" }).eq("user_id", userId).neq("scope", "mine");
+  const { data: members } = await admin.from("household_members").select("user_id").eq("household_id", member.household_id);
+  const ids = (members ?? []).map((m) => m.user_id as string);
+  await admin.from("household_members").delete().eq("household_id", member.household_id);
+  await admin.from("household_invites").delete().eq("household_id", member.household_id).is("used_at", null);
+  await admin.from("household_proposals").update({ status: "withdrawn", decided_at: new Date().toISOString(), decided_by: userId }).eq("household_id", member.household_id).eq("status", "pending");
+  for (const id of ids) {
+    await admin.from("transactions").update({ scope: "mine" }).eq("user_id", id).neq("scope", "mine");
+    await admin.from("upcoming_bills").update({ scope: "mine" }).eq("user_id", id).eq("scope", "ours");
+    await admin.from("subscriptions").update({ scope: "mine" }).eq("user_id", id).eq("scope", "ours");
+  }
 }
 
 export async function updateMember(userId: string, patch: { incomeCents?: number | null; pixKey?: string | null }) {

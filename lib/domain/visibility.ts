@@ -130,3 +130,14 @@ export function applyPrivacyRules(tx: { tag_id: string | null; account_id: strin
   }
   return { privacy, askSurprise };
 }
+
+/**
+ * Whether the partner (not the owner) may change whose a purchase is. Moving a purchase to Nosso shows
+ * it in full, so the partner may only move what they already see in full: purchases already shared
+ * or theirs, or the owner's purchases visible as "detail". Never "category only", hidden, surprises,
+ * free money or anything on an account that is private or shows only totals.
+ */
+export function partnerMayReassign(tx: OwnedTransaction, account: OwnedAccount | undefined, today: string): boolean {
+  if (tx.scope === "ours" || tx.scope === "partner") return true;
+  return projectForPartner(tx, account, today)?.kind === "detail";
+}

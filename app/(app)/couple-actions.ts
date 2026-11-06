@@ -20,6 +20,7 @@ import { DomainError } from "@/lib/application/transactions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseBRL } from "@/lib/domain/money";
 import { normalizePixKey } from "@/lib/domain/pix";
+import { safeRelativePath } from "@/lib/safe-path";
 import { SPACE_COOKIE } from "@/lib/space";
 
 export type ActionState = { error?: string; ok?: string; code?: string } | undefined;
@@ -31,8 +32,7 @@ function friendly(error: unknown): string {
 }
 
 function safePath(value: FormDataEntryValue | null, fallback: string): string {
-  const path = typeof value === "string" ? value : "";
-  return path.startsWith("/") && !path.startsWith("//") ? path : fallback;
+  return safeRelativePath(value, fallback);
 }
 
 /** Switches Meu | Nosso and remembers it, so Início opens the last space used. */

@@ -7,14 +7,14 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { recordInvoiceSettlement, setAutoOurs, setInvoiceOwner } from "@/lib/application/cards";
 import { DomainError } from "@/lib/application/transactions";
+import { safeRelativePath } from "@/lib/safe-path";
 
 export type CardsState = { error?: string; ok?: string } | undefined;
 
 const owner = z.enum(["ours", "holder", "partner"]);
 
 function back(formData: FormData, fallback: string): string {
-  const path = String(formData.get("returnTo") ?? "");
-  return path.startsWith("/") && !path.startsWith("//") ? path : fallback;
+  return safeRelativePath(formData.get("returnTo"), fallback);
 }
 
 /** Tap on the owner marker: Nosso → holder → partner → Nosso. */

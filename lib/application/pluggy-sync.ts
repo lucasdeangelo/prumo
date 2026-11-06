@@ -19,7 +19,8 @@ const OVERLAP_DAYS = 10;
 /** Saves a connection created by the widget. The item must belong to this user (clientUserId). */
 async function ensureItemRow(userId: string, pluggyItemId: string) {
   const item = await pluggy.getItem(pluggyItemId);
-  if (item.clientUserId && item.clientUserId !== userId) throw new pluggy.PluggyError("Conexão de outro usuário.", 403);
+  // Connect tokens always carry clientUserId = the person; anything else is not theirs to claim.
+  if (item.clientUserId !== userId) throw new pluggy.PluggyError("Conexão de outro usuário.", 403);
   const admin = createAdminClient();
   const { data: existing } = await admin.from("pluggy_items").select("id, user_id").eq("pluggy_item_id", pluggyItemId).is("deleted_at", null);
   if (existing?.some((row) => row.user_id !== userId)) throw new pluggy.PluggyError("Conexão já vinculada a outro usuário.", 409);

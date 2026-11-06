@@ -15,7 +15,8 @@ import {
 } from "../lib/domain/couple";
 import { formatBRL } from "../lib/domain/money";
 import { buildPixPayload, crc16, maskPixKey, normalizePixKey } from "../lib/domain/pix";
-import { applyPrivacyRules, keptPrivateSummary, partnerAccountsView, projectForPartner, type OwnedAccount, type OwnedTransaction } from "../lib/domain/visibility";
+import { applyPrivacyRules, keptPrivateSummary, partnerAccountsView, partnerMayReassign, projectForPartner, type OwnedAccount, type OwnedTransaction } from "../lib/domain/visibility";
+import { safeRelativePath } from "../lib/safe-path";
 
 const today = "2026-11-05";
 const account = (id: string, visibility: OwnedAccount["visibility"]): OwnedAccount => ({ id, name: id, visibility, balance_cents: 100000, type: "BANK" });
@@ -195,5 +196,28 @@ describe("Pix copia e cola", () => {
     expect(normalizePixKey("Ana@Exemplo.com")).toBe("ana@exemplo.com");
     expect(normalizePixKey("123.456.789-09")).toBe("12345678909");
     expect(maskPixKey("(11) 98765-4321")).toBe("celular •••• 4321");
+  });
+});
+
+describe("security rules", () => {
+  it("the partner may only reassign what they already see in full", () => {
+    const details = account("conta", "details");
+    expect(partnerMayReassign(tx({}), details, today)).toBe(true);
+    expect(partnerMayReassign(tx({ privacy: "category_only" }), details, today)).toBe(false);
+    expect(partnerMayReassign(tx({ privacy: "hidden" }), details, today)).toBe(false);
+    expect(partnerMayReassign(tx({ free_money: true }), details, today)).toBe(false);
+    expect(partnerMayReassign(tx({ surprise_until: "2026-12-24" }), details, today)).toBe(false);
+    expect(partnerMayReassign(tx({}), account("conta", "totals"), today)).toBe(false);
+    expect(partnerMayReassign(tx({}), account("conta", "private"), today)).toBe(false);
+    expect(partnerMayReassign(tx({}), undefined, today)).toBe(false);
+    expect(partnerMayReassign(tx({ scope: "ours" }), account("conta", "private"), today)).toBe(true);
+    expect(partnerMayReassign(tx({ scope: "partner" }), account("conta", "private"), today)).toBe(true);
+  });
+
+  it("redirects stay on this site", () => {
+    expect(safeRelativePath("/cards?m=1", "/x")).toBe("/cards?m=1");
+    for (const bad of ["https://evil.com", "//evil.com", "/\\evil.com", "/a\\b", " //evil.com", "/\tx", "javascript:alert(1)", "", null, 42]) {
+      expect(safeRelativePath(bad, "/x")).toBe("/x");
+    }
   });
 });

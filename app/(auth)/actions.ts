@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { safeRelativePath } from "@/lib/safe-path";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type AuthState = { error?: string; ok?: string } | undefined;
@@ -18,8 +19,7 @@ async function origin() {
 
 /** Only same-site relative paths are accepted as post-login destinations. */
 function safeNext(value: FormDataEntryValue | null): string {
-  const next = typeof value === "string" ? value : "";
-  return next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/overview";
+  return safeRelativePath(value, "/overview");
 }
 
 export async function signInAction(_: AuthState, formData: FormData): Promise<AuthState> {

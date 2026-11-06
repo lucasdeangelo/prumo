@@ -2,7 +2,7 @@ import "server-only";
 
 import { invoiceSettlement } from "@/lib/domain/couple";
 import { addMonths, todayIn } from "@/lib/domain/dates";
-import { projectForPartner } from "@/lib/domain/visibility";
+import { partnerMayReassign, projectForPartner, type OwnedAccount } from "@/lib/domain/visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { invoicePeriod, loadAccounts, loadCategoryNames, loadFacts, loadSplitRules, shareFor, toOwned, type AccountRow, type FactRow } from "./couple-data";
@@ -86,16 +86,25 @@ export async function loadInvoice(viewerId: string, household: Household | null,
 /** Changes whose a purchase is ("Nosso", the holder's or the partner's). Either person may do it for lines they see. */
 export async function setInvoiceOwner(viewerId: string, factId: string, owner: InvoiceOwner, split?: { method: "equal" | "income" | "fixed"; share?: number | null }) {
   const admin = createAdminClient();
-  const { data: fact } = await admin.from("transactions").select("id, user_id, account_id, privacy, surprise_until, free_money, scope").eq("id", factId).is("deleted_at", null).maybeSingle();
+  const { data } = await admin
+    .from("transactions")
+    .select("id, user_id, account_id, amount_cents, type, transaction_date, user_description, provider_description, merchant, tag_id, scope, privacy, surprise_until, surprise_hide_amount, free_money")
+    .eq("id", factId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  const fact = data as FactRow | null;
   if (!fact) throw new DomainError("Compra não encontrada.");
   const household = await getHousehold(viewerId);
   const isHolder = fact.user_id === viewerId;
   const isPartner = household?.partner?.userId === fact.user_id;
   if (!isHolder && !isPartner) throw new DomainError("Compra não encontrada.");
   if (isPartner) {
-    const { data: card } = await admin.from("accounts").select("visibility").eq("id", fact.account_id).maybeSingle();
-    const hiddenFromViewer = !card || card.visibility === "private" || fact.privacy === "hidden" || Boolean(fact.surprise_until) || fact.free_money;
-    if (hiddenFromViewer && fact.scope === "mine") throw new DomainError("Compra não encontrada.");
+    // Moving a purchase to Nosso shows it in full, so the partner may only move what they already see
+    // in full: never "category only", hidden, surprises, free money or a private/totals-only account.
+    const { data: card } = fact.account_id
+      ? await admin.from("accounts").select("id, name, visibility, balance_cents, type").eq("id", fact.account_id).eq("user_id", fact.user_id).maybeSingle()
+      : { data: null };
+    if (!partnerMayReassign(toOwned(fact), (card as OwnedAccount | null) ?? undefined, todayIn())) throw new DomainError("Compra não encontrada.");
   }
   const scope = owner === "ours" ? "ours" : owner === "partner" ? "partner" : "mine";
   const update: Record<string, unknown> = { scope };

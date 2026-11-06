@@ -1,6 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { safeRelativePath } from "@/lib/safe-path";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const TYPES: EmailOtpType[] = ["signup", "recovery", "email", "email_change", "invite", "magiclink"];
@@ -11,8 +12,7 @@ export async function GET(request: NextRequest) {
   const tokenHash = url.searchParams.get("token_hash");
   const type = url.searchParams.get("type") as EmailOtpType | null;
   const code = url.searchParams.get("code");
-  const nextParam = url.searchParams.get("next") ?? "/overview";
-  const next = nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/overview";
+  const next = safeRelativePath(url.searchParams.get("next"), "/overview");
   const supabase = await createServerSupabaseClient();
 
   let ok = false;

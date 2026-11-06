@@ -9,6 +9,7 @@ import { disconnectItem, stageConnection, syncItem } from "@/lib/application/plu
 import { setAccountImport } from "@/lib/application/privacy";
 import { ConfigurationError, getServerEnv } from "@/lib/env.server";
 import { createConnectToken, PluggyError } from "@/lib/integrations/pluggy";
+import { safeRelativePath } from "@/lib/safe-path";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 
@@ -60,7 +61,7 @@ export async function setImportAction(formData: FormData) {
   const { user } = await requireUser();
   const accountId = z.uuid().parse(formData.get("accountId"));
   await setAccountImport(user.id, accountId, formData.get("import") === "1");
-  redirect(String(formData.get("returnTo") ?? "/connect?step=6"));
+  redirect(safeRelativePath(formData.get("returnTo"), "/connect?step=6"));
 }
 
 export async function importConnectionAction(itemId: string): Promise<{ imported?: number; accounts?: number; partial?: boolean; error?: string }> {
