@@ -8,11 +8,14 @@ select public.ensure_profile('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'Usuária C
 select public.ensure_profile('dddddddd-dddd-4ddd-8ddd-dddddddddddd', null);
 
 do $$ begin
-  if (select count(*) from public.tags where user_id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc') <> 14 then
+  if (select count(*) from public.tags where user_id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc') <> 15 then
     raise exception 'Onboarding is not idempotent';
   end if;
   if not (select excluded_from_totals from public.tags where user_id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' and name = 'Transferências') then
     raise exception 'Transfers must be excluded from totals';
+  end if;
+  if (select excluded_from_totals from public.tags where user_id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' and name = 'Pix e TED') then
+    raise exception 'Pix to other people must count as spending';
   end if;
   if has_function_privilege('authenticated', 'public.mark_bill_paid(uuid, uuid, uuid, date, text)', 'EXECUTE') then
     raise exception 'mark_bill_paid must not be executable by authenticated';

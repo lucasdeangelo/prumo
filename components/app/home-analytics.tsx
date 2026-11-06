@@ -13,6 +13,25 @@ import { monthlyEquivalentCents } from "@/lib/domain/recurrence";
 import { monthlySeries, summarizeMonth } from "@/lib/domain/summary";
 import type { Subscription, Tag, Transaction, UpcomingBill } from "@/lib/types";
 
+/** Balance of the checking accounts; below zero means the overdraft is in use. */
+export function BalanceCard({ balanceCents, hasBalance }: { balanceCents: number; hasBalance: boolean }) {
+  return (
+    <Card className="flex flex-col gap-2 border-0 bg-primary p-6 text-primary-foreground">
+      <p className="label-mono text-[#cfe0d8]">Saldo em Conta</p>
+      <p className="tabular text-[40px] font-medium leading-[1.05] tracking-[-0.03em]">
+        {hasBalance ? (
+          <>
+            <span className="tabular font-medium text-white">{formatBRL(balanceCents)}</span>
+            {balanceCents < 0 ? " · usando o cheque especial" : ""}
+          </>
+        ) : (
+          "Conecte um banco em Ajustes para ver o saldo."
+        )}
+      </p>
+    </Card>
+  );
+}
+
 /** Month result, the last 6 months, spending by tag, next 14 days and recent items, for one space. */
 export function HomeAnalytics({
   month,
@@ -23,6 +42,7 @@ export function HomeAnalytics({
   subscriptions,
   balanceCents,
   hasBalance,
+  showBalance = true,
 }: {
   month: string;
   today: string;
@@ -30,8 +50,11 @@ export function HomeAnalytics({
   tags: Tag[];
   bills: UpcomingBill[];
   subscriptions: Subscription[];
+  /** Checking accounts only, signed: below zero means overdraft in use. */
   balanceCents: number;
   hasBalance: boolean;
+  /** False when the page shows the balance itself (above the accounts). */
+  showBalance?: boolean;
 }) {
   const months = lastMonths(month, 6);
   const summary = summarizeMonth(history, tags, month);
@@ -59,16 +82,7 @@ export function HomeAnalytics({
 
   return (
     <>
-      <Card className="flex flex-col gap-2 border-0 bg-primary p-6 text-primary-foreground">
-        <p className="label-mono text-[#cfe0d8]">Resultado do mês</p>
-        <p className="tabular text-[40px] font-medium leading-[1.05] tracking-[-0.03em]">
-          {summary.netCents >= 0 ? "+ " : "− "}
-          {formatBRL(Math.abs(summary.netCents))}
-        </p>
-        <p className="text-sm text-[#cfe0d8]">
-          {hasBalance ? <>Saldo informado pelos bancos: <span className="tabular font-medium">{formatBRL(balanceCents)}</span></> : "Conecte um banco em Ajustes para ver o saldo."}
-        </p>
-      </Card>
+      {showBalance ? <BalanceCard balanceCents={balanceCents} hasBalance={hasBalance} /> : null}
 
       <div className="grid grid-cols-2 gap-3">
         <StatTile label="Entradas" cents={summary.incomeCents} tone="in" />

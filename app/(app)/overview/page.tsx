@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Amount, SectionHeader } from "@/components/app/bits";
 import { CoupleAvatars, InstitutionMark, SegmentBar, SpaceSwitcher, UpdatedAt, VisibilityBadge, PERSON_BG } from "@/components/app/couple";
-import { HomeAnalytics } from "@/components/app/home-analytics";
+import { BalanceCard, HomeAnalytics } from "@/components/app/home-analytics";
 import { ChevronRightIcon } from "@/components/app/icons";
 import { Card, EmptyState } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
@@ -90,7 +90,8 @@ async function MeuHome({ userId, db, ctx, today, month, lowerMonth, historyStart
   const myHistory = history.filter(mine);
   const partnerName = household?.partner?.name ?? "seu par";
   const recentMine = myHistory.filter((t) => t.transaction_date >= monthBounds(month).start).slice(0, 3);
-  const withBalance = accounts.filter((a) => a.balance_cents !== null);
+  // Card balances are debt, shown in Cartões; the balance here is what is in the accounts.
+  const bankAccounts = accounts.filter((a) => a.balance_cents !== null && a.type !== "CREDIT");
 
   return (
     <>
@@ -111,18 +112,26 @@ async function MeuHome({ userId, db, ctx, today, month, lowerMonth, historyStart
         </Link>
       ) : null}
 
+      <BalanceCard balanceCents={bankAccounts.reduce((s, a) => s + (a.balance_cents ?? 0), 0)} hasBalance={bankAccounts.length > 0} />
+
       {accounts.length > 0 ? (
-        <section className="grid gap-2">
+        <section className="grid gap-1.5">
           <SectionHeader title="Suas contas" action={hasPartner ? <Link href="/privacy/visibility" className="flex min-h-11 items-center text-sm font-medium">Visibilidade</Link> : undefined} />
           <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
             {accounts.map((a) => (
-              <li key={a.id} className="flex min-h-16 items-center gap-3 px-4 py-3">
-                <InstitutionMark name={a.institution ?? a.name} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[15px] font-medium">{a.name}{a.card_last4 ? ` •• ${a.card_last4}` : ""}</span>
-                  {hasPartner ? <span className="mt-1 block"><VisibilityBadge kind={a.visibility} /></span> : null}
-                </span>
-                {a.balance_cents !== null ? <Amount cents={Math.abs(a.balance_cents)} className="text-[15px]" /> : null}
+              <li key={a.id}>
+                <Link href={`/accounts/${a.id}`} className="flex min-h-11 items-center gap-2.5 px-3 py-1.5 text-foreground no-underline hover:text-foreground">
+                  <InstitutionMark name={a.institution ?? a.name} size="sm" />
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    <span className="font-medium">{a.type === "CREDIT" ? `Cartão ${a.institution ?? a.name}` : a.institution ?? a.name}</span>
+                    {a.card_last4 ? <span className="text-muted-foreground"> •• {a.card_last4}</span> : null}
+                    {hasPartner ? <span className="text-[12px] text-muted-foreground"> · {VISIBILITY_SHORT[a.visibility]}</span> : null}
+                  </span>
+                  {a.balance_cents !== null ? (
+                    // Card balances are stored as debt (negative); a checking account below zero is overdraft.
+                    <Amount cents={a.type === "CREDIT" ? Math.abs(a.balance_cents) : a.balance_cents} className="text-sm" />
+                  ) : null}
+                </Link>
               </li>
             ))}
           </ul>
@@ -165,12 +174,15 @@ async function MeuHome({ userId, db, ctx, today, month, lowerMonth, historyStart
         tags={tags}
         bills={bills.filter(mine)}
         subscriptions={subscriptions.filter(mine)}
-        balanceCents={withBalance.reduce((s, a) => s + (a.balance_cents ?? 0), 0)}
-        hasBalance={withBalance.length > 0}
+        balanceCents={bankAccounts.reduce((s, a) => s + (a.balance_cents ?? 0), 0)}
+        hasBalance={bankAccounts.length > 0}
+        showBalance={false}
       />
     </>
   );
 }
+
+const VISIBILITY_SHORT: Record<"private" | "totals" | "details", string> = { private: "só eu vejo", totals: "só totais", details: "com detalhes" };
 
 function PrivacyBadge({ tx, today, partnerName }: { tx: Transaction; today: string; partnerName: string }) {
   if (tx.surprise_until && tx.surprise_until >= today) return <VisibilityBadge kind="surprise" until={formatDayShort(tx.surprise_until)} />;
@@ -195,7 +207,7 @@ async function NossoHome({ userId, ctx, today, month, lowerMonth, historyStart }
     ...ctx.accounts.filter((a) => a.user_id === userId && a.visibility !== "private").map((a) => ({ id: a.id, name: a.name, institution: a.institution, owner: household.me.name, visibility: a.visibility as "totals" | "details", balance: a.balance_cents })),
     ...partnerView(household, ctx.accounts, ctx.facts, today).map((v) => ({ id: v.id, name: v.name, institution: ctx.accounts.find((a) => a.id === v.id)?.institution ?? null, owner: partner.name, visibility: v.visibility, balance: v.balanceCents })),
   ];
-  const invoice = invoices.find((i) => i.items.length > 0) ?? invoices[0];
+  const invoice = invoices.find((i) => i.items.length + i.pending.length > 0) ?? invoices[0];
   const activeGoals = goals.filter((g) => g.status === "active").slice(0, 2);
   const people = household.me.color === "blue" ? [household.me, partner] : [partner, household.me];
   const previousMonth = addMonths(`${month}-01`, -1).slice(0, 7);
@@ -242,7 +254,7 @@ async function NossoHome({ userId, ctx, today, month, lowerMonth, historyStart }
         <Link href={`/cards?card=${invoice.card.id}`} className="block rounded-2xl border border-border bg-card p-5 text-foreground no-underline hover:text-foreground">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[15px] font-medium">Fatura {invoice.card.institution ?? invoice.card.name}{invoice.card.card_last4 ? ` •• ${invoice.card.card_last4}` : ""}</span>
-            <Amount cents={Math.max(0, invoice.settlement.totalCents)} className="text-[15px]" />
+            <Amount cents={Math.max(0, invoice.totalCents)} className="text-[15px]" />
           </div>
           <p className="text-[13px] text-muted-foreground">Vence {formatDayShort(invoice.period.due)}</p>
           <div className="mt-3">

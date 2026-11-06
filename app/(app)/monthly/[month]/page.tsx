@@ -12,6 +12,7 @@ import { SpaceSwitcher, UpdatedAt } from "@/components/app/couple";
 import { requireUser } from "@/lib/auth/session";
 import { lastSyncAt, loadSharedHistory, loadSharedPlans } from "@/lib/application/couple-data";
 import { getHousehold } from "@/lib/application/household";
+import { overdraftFor } from "@/lib/application/overdraft";
 import { currentSpace } from "@/lib/space";
 import { formatDayShort, formatMonthLong, isMonthKey, monthBounds, monthOf, todayIn } from "@/lib/domain/dates";
 import { formatBRL } from "@/lib/domain/money";
@@ -57,6 +58,7 @@ export default async function MonthPage({ params, searchParams }: { params: Prom
   const monthBills = month >= current ? openBills : [];
 
   const summary = summarizeMonth(transactions, tags, month);
+  const overdraft = nosso ? [] : await overdraftFor(user.id, month);
   const previousSummary = summarizeMonth(previous, tags, prev);
   const isCurrent = month === current;
   const todayDay = Number(today.slice(8, 10));
@@ -111,6 +113,25 @@ export default async function MonthPage({ params, searchParams }: { params: Prom
             <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">vs. anterior<span className="tabular text-[15px] font-medium text-white">{deltaPct === null ? "—" : `${deltaPct > 0 ? "+" : ""}${deltaPct}%`}</span></span>
           )}
         </div>
+        {overdraft.some((o) => o.negativeDays > 0 || o.chargesCents > 0) ? (
+          <p className="border-t border-white/20 pt-3 text-sm text-[#cfe0d8]">
+            {overdraft.map((o) => (
+              <span key={o.account.id} className="block">
+                Cheque especial {o.account.institution ?? o.account.name}: {o.negativeDays} {o.negativeDays === 1 ? "dia" : "dias"} no negativo
+                {o.lowestDate ? (
+                  <>
+                    , chegando a <span className="tabular font-medium text-white">{formatBRL(o.lowestCents)}</span> em {formatDayShort(o.lowestDate)}
+                  </>
+                ) : null}
+                {o.chargesCents > 0 ? (
+                  <>
+                    {" · "}juros e IOF <span className="tabular font-medium text-white">{formatBRL(o.chargesCents)}</span>, já nas saídas
+                  </>
+                ) : null}
+              </span>
+            ))}
+          </p>
+        ) : null}
       </section>
 
       <section className="grid gap-2.5">

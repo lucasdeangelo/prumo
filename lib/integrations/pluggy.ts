@@ -23,6 +23,11 @@ export type PluggyAccount = {
   balance: number | null;
   currencyCode: string | null;
   itemId: string;
+  bankData?: {
+    overdraftContractedLimit?: number | null;
+    overdraftUsedLimit?: number | null;
+    unarrangedOverdraftAmount?: number | null;
+  } | null;
   creditData?: {
     creditLimit?: number | null;
     availableCreditLimit?: number | null;
@@ -38,12 +43,24 @@ export type PluggyTransaction = {
   description: string;
   descriptionRaw?: string | null;
   amount: number;
+  /** Currency of `amount`; international purchases come in the original currency. */
+  currencyCode?: string | null;
+  /** Charged value in the account's currency, when `currencyCode` differs. */
+  amountInAccountCurrency?: number | null;
   date: string;
   type: "DEBIT" | "CREDIT";
   status?: "PENDING" | "POSTED";
   category?: string | null;
   merchant?: { name?: string | null; businessName?: string | null } | null;
-  creditCardMetadata?: { installmentNumber?: number | null; totalInstallments?: number | null; cardNumber?: string | null } | null;
+  creditCardMetadata?: {
+    installmentNumber?: number | null;
+    totalInstallments?: number | null;
+    cardNumber?: string | null;
+    /** Set once the invoice that holds this transaction is closed. */
+    billId?: string | null;
+    /** Invoice month the bank expects this transaction in ("2026-12"). */
+    billForecastDate?: string | null;
+  } | null;
 };
 
 export type PluggyItemResponse = {
@@ -92,11 +109,16 @@ async function getApiKey(): Promise<string> {
   return data.apiKey;
 }
 
-/** Connect token for the widget. clientUserId must go inside options or Pluggy discards it. */
-export async function createConnectToken(clientUserId: string, itemId?: string) {
+/**
+ * Connect token for the widget. clientUserId must go inside options or Pluggy discards it.
+ * No `avoidDuplicates`: with MeuPluggy every bank is authorized separately and becomes its own
+ * item, so a second bank looked like a duplicate (ITEM_USER_ALREADY_EXISTS) and was never added.
+ * Re-authorizing a bank already connected is handled when its accounts are saved.
+ */
+export async function createConnectToken(clientUserId: string) {
   const data = await request<{ accessToken: string }>("/connect_token", {
     method: "POST",
-    body: JSON.stringify({ ...(itemId ? { itemId } : {}), options: { clientUserId, avoidDuplicates: true } }),
+    body: JSON.stringify({ options: { clientUserId } }),
   });
   return data.accessToken;
 }
@@ -117,6 +139,21 @@ export function deleteItem(itemId: string) {
 export async function listAccounts(itemId: string): Promise<PluggyAccount[]> {
   const data = await request<{ results: PluggyAccount[] }>(`/accounts?itemId=${encodeURIComponent(itemId)}`);
   return data.results;
+}
+
+export type PluggyBill = {
+  id: string;
+  dueDate: string;
+  totalAmount: number;
+  minimumPaymentAmount?: number | null;
+  /** Payments applied to this invoice; the unpaid rest rolls into the next one. */
+  payments?: Array<{ amount: number }> | null;
+};
+
+/** Closed credit card invoices with the bank's totals (most recent first). */
+export async function listBills(accountId: string): Promise<PluggyBill[]> {
+  const data = await request<{ results: PluggyBill[] }>(`/bills?accountId=${encodeURIComponent(accountId)}&pageSize=24`);
+  return data.results ?? [];
 }
 
 /** Cursor pagination over /v2/transactions. Bounded to avoid runaway loops. */

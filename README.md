@@ -88,6 +88,6 @@ npm run build
 
 ## Deploy
 
-App na Vercel (variáveis do `.env.example`, `vercel.json` já agenda o cron), banco/Auth no Supabase (`npx supabase db push` para aplicar as migrations), bot em uma VPS com disco persistente para `bot/session` (whatsapp-web.js usa Chromium e não roda em serverless). Separe desenvolvimento, staging e produção. **Nenhuma migration foi aplicada ao projeto Supabase remoto.**
+App na Vercel (variáveis do `.env.example`, `vercel.json` já agenda o cron), banco/Auth no Supabase (`npx supabase db push` para aplicar as migrations), bot em uma VPS com disco persistente para a sessão do WhatsApp (`~/.prumo-bot/session` ou `WHATSAPP_SESSION_PATH`, sempre fora da pasta do app) (whatsapp-web.js usa Chromium e não roda em serverless). Separe desenvolvimento, staging e produção. **Nenhuma migration foi aplicada ao projeto Supabase remoto.**
 
 > whatsapp-web.js automatiza o WhatsApp Web e não é uma API oficial; use um número dedicado ao bot.

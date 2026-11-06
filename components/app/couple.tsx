@@ -167,12 +167,16 @@ export function BudgetBar({ spentCents, limitCents }: { spentCents: number; limi
 }
 
 /** Row icon for an institution: two letters in a soft square ("Nu", "In", "XP"). */
-export function InstitutionMark({ name }: { name: string }) {
+export function InstitutionMark({ name, size = "md" }: { name: string; size?: "sm" | "md" }) {
   const short = name.replace(/[^A-Za-zÀ-ú0-9 ]/g, "").trim().slice(0, 2) || "?";
   const lower = name.toLowerCase();
   const bg = lower.includes("nu") ? "#820AD1" : lower.includes("inter") ? "#FF7A00" : lower.includes("itau") || lower.includes("itaú") ? "#EC7000" : lower.includes("xp") ? "#121512" : lower.includes("c6") ? "#242424" : "#5E625C";
   return (
-    <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-[10px] text-[13px] font-semibold text-white" style={{ background: bg }}>
+    <span
+      aria-hidden="true"
+      className={size === "sm" ? "flex size-7 shrink-0 items-center justify-center rounded-[7px] text-[11px] font-semibold text-white" : "flex size-10 shrink-0 items-center justify-center rounded-[10px] text-[13px] font-semibold text-white"}
+      style={{ background: bg }}
+    >
       {short.charAt(0).toUpperCase() + short.slice(1).toLowerCase()}
     </span>
   );

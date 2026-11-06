@@ -254,3 +254,20 @@ describe("reconciliation", () => {
     expect(used.candidates).toEqual([]);
   });
 });
+
+describe("Pix and transfers", () => {
+  const tags = [
+    { id: "transfer", name: "Transferências" },
+    { id: "pix", name: "Pix e TED" },
+    { id: "other", name: "Outros" },
+  ];
+  it("Pix to someone else is spending, to oneself is a transfer", () => {
+    expect(categorize({ description: "Pix enviado RENATO BATISTA", type: "debit", providerCategory: "Transfer - PIX" }, [], tags)?.tagId).toBe("pix");
+    expect(categorize({ description: "Pix enviado LUCAS DE ANGELO", type: "debit", providerCategory: "Same person transfer" }, [], tags)?.tagId).toBe("transfer");
+    expect(categorize({ description: "Pagamento de fatura", type: "debit", providerCategory: "Credit card payment" }, [], tags)?.tagId).toBe("transfer");
+  });
+  it("received transfers stay out of income, and old tag sets still work", () => {
+    expect(categorize({ description: "Pix recebido FULANO", type: "credit", providerCategory: "Transfer - PIX" }, [], tags)?.tagId).toBe("transfer");
+    expect(categorize({ description: "Pix enviado RENATO", type: "debit", providerCategory: "Transfer - PIX" }, [], tags.filter((t) => t.id !== "pix"))?.tagId).toBe("transfer");
+  });
+});

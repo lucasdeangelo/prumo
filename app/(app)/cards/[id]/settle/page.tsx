@@ -57,7 +57,7 @@ export default async function SettlePage({ params, searchParams }: { params: Pro
       </Card>
 
       <Card className="grid gap-2 text-sm">
-        <div className="flex justify-between"><span>{holder.name} paga a fatura inteira</span><span className="tabular">{formatBRL(Math.max(0, invoice.settlement.totalCents))}</span></div>
+        <div className="flex justify-between"><span>{holder.name} paga a fatura inteira</span><span className="tabular">{formatBRL(Math.max(0, invoice.totalCents))}</span></div>
         <div className="flex justify-between"><span>Parte de {other.name} no que é Nosso{shares.length === 1 ? ` (${shares[0]})` : ""}</span><span className="tabular">{formatBRL(invoice.settlement.partnerShareOfOursCents)}</span></div>
         <div className="flex justify-between"><span>Compras de {other.name}{card.partner_card_last4 ? " no adicional" : ""}</span><span className="tabular">{formatBRL(invoice.holderTotals.partner)}</span></div>
         <div className="flex justify-between border-t border-border pt-2 font-medium"><span>{other.name} transfere</span><span className="tabular">{formatBRL(amount)}</span></div>

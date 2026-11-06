@@ -31,7 +31,7 @@ const KEYWORDS: Array<{ tag: string; type?: TransactionType; words: string[] }> 
 ];
 
 // Pluggy category names (English) mapped to default tags. Matched by substring, lower-case.
-const PROVIDER_CATEGORIES: Array<{ tag: string; words: string[] }> = [
+const PROVIDER_CATEGORIES: Array<{ tag: string; type?: TransactionType; words: string[] }> = [
   { tag: "Salário", words: ["salary", "income"] },
   { tag: "Investimentos", words: ["investment"] },
   { tag: "Transferências", words: ["same person transfer", "credit card payment"] },
@@ -45,6 +45,8 @@ const PROVIDER_CATEGORIES: Array<{ tag: string; words: string[] }> = [
   { tag: "Educação", words: ["education", "school", "university", "courses", "books"] },
   { tag: "Lazer", words: ["leisure", "entertainment", "tickets", "games", "travel", "lodging"] },
   { tag: "Compras", words: ["shopping", "online shopping", "clothing", "electronics", "department store"] },
+  // Pix/TED sent to someone else is spending; between one's own accounts it was matched above.
+  { tag: "Pix e TED", type: "debit", words: ["transfer"] },
   { tag: "Transferências", words: ["transfer"] },
 ];
 
@@ -93,6 +95,7 @@ export function categorize(input: CategorizeInput, rules: TagRule[], tags: TagRe
   if (input.providerCategory) {
     const category = input.providerCategory.toLowerCase();
     for (const group of PROVIDER_CATEGORIES) {
+      if (group.type && group.type !== input.type) continue;
       const tagId = byName.get(normalizeText(group.tag));
       if (tagId && group.words.some((word) => category.includes(word))) {
         return { tagId, confidence: 0.6, source: "provider" };

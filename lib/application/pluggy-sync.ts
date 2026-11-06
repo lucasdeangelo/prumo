@@ -1,5 +1,6 @@
 import "server-only";
 
+import { accountAmount, billMonthOf, installmentFromDescription, isPurchaseRefund, refundedInstallmentIds, type InstallmentItem } from "@/lib/domain/card-invoice";
 import { categorize } from "@/lib/domain/categorize";
 import { addDays, instantToDate, todayIn } from "@/lib/domain/dates";
 import { decimalToCents } from "@/lib/domain/money";
@@ -78,6 +79,12 @@ async function upsertAccounts(userId: string, rowId: string, item: pluggy.Pluggy
       available_limit_cents: account.creditData?.availableCreditLimit != null ? decimalToCents(account.creditData.availableCreditLimit) : null,
       bill_close_date: account.creditData?.balanceCloseDate ? account.creditData.balanceCloseDate.slice(0, 10) : null,
       bill_due_date: account.creditData?.balanceDueDate ? account.creditData.balanceDueDate.slice(0, 10) : null,
+      overdraft_limit_cents: account.bankData?.overdraftContractedLimit != null ? Math.abs(decimalToCents(account.bankData.overdraftContractedLimit)) : null,
+      // Used limit plus any amount beyond it ("não contratado").
+      overdraft_used_cents:
+        account.bankData?.overdraftUsedLimit != null || account.bankData?.unarrangedOverdraftAmount != null
+          ? Math.abs(decimalToCents(account.bankData?.overdraftUsedLimit ?? 0)) + Math.abs(decimalToCents(account.bankData?.unarrangedOverdraftAmount ?? 0))
+          : null,
     };
     const { data: local } = await admin
       .from("accounts")
@@ -90,13 +97,27 @@ async function upsertAccounts(userId: string, rowId: string, item: pluggy.Pluggy
       await admin.from("accounts").update({ ...fields, archived_at: null }).eq("user_id", userId).eq("id", local.id);
       result.push({ id: local.id as string, pluggyAccountId: account.id, importEnabled: local.import_enabled as boolean, partnerCard: (local.partner_card_last4 as string | null) ?? null });
     } else {
+      // The same bank authorized again in another connection: keep the first one importing so
+      // nothing is counted twice. The person can still switch it in the account choice.
+      const { data: twins } = await admin
+        .from("accounts")
+        .select("id")
+        .eq("user_id", userId)
+        .neq("pluggy_item_id", rowId)
+        .eq("type", account.type)
+        .eq("name", fields.name)
+        .is("archived_at", null)
+        .eq("import_enabled", true)
+        .filter("card_last4", fields.card_last4 === null ? "is" : "eq", fields.card_last4 === null ? "null" : fields.card_last4)
+        .limit(1);
+      const duplicate = (twins ?? []).length > 0;
       const { data: created, error } = await admin
         .from("accounts")
-        .insert({ ...fields, user_id: userId, pluggy_item_id: rowId, pluggy_account_id: account.id, is_manual: false })
+        .insert({ ...fields, user_id: userId, pluggy_item_id: rowId, pluggy_account_id: account.id, is_manual: false, import_enabled: !duplicate })
         .select("id")
         .single();
       if (error) throw new Error(`Falha ao salvar conta bancária: ${error.message}`);
-      result.push({ id: created.id as string, pluggyAccountId: account.id, importEnabled: true, partnerCard: null });
+      result.push({ id: created.id as string, pluggyAccountId: account.id, importEnabled: !duplicate, partnerCard: null });
     }
   }
   return result;
@@ -151,10 +172,18 @@ export async function syncItem(userId: string, pluggyItemId: string) {
     const local = locals.find((l) => l.pluggyAccountId === account.id)!;
     // The person chose not to bring this account (design: "não importar").
     if (!local.importEnabled) continue;
-    const txs = await pluggy.listTransactions(account.id, from, addDays(today, 1));
+    const isCard = account.type === "CREDIT";
+    // Closed invoices with the bank's totals; they also tell which invoice each purchase is in.
+    const dueMonthByBillId = isCard ? await saveCardBills(userId, local.id, account.id) : new Map<string, string>();
+    // Cards imported before invoice months were stored get their history again, once.
+    let accountFrom = isCard && (await missingBillMonths(local.id, addDays(today, -60))) ? addDays(today, -INITIAL_DAYS) : from;
+    // The open invoice can hold items from ~2 months ago that are still pending.
+    if (isCard && accountFrom > addDays(today, -75)) accountFrom = addDays(today, -75);
+    // Cards also bring installments already scheduled for the coming invoices.
+    const txs = await pluggy.listTransactions(account.id, accountFrom, addDays(today, isCard ? 550 : 1));
     // Pending items may be re-issued with another id once posted; import only posted facts.
     const rows = txs
-      .filter((tx) => tx.status !== "PENDING")
+      .filter((tx) => tx.status !== "PENDING" && instantToDate(tx.date) <= addDays(today, 1))
       .map((tx) => {
         // The `type` field decides direction: the amount sign differs between account kinds.
         const type = tx.type === "CREDIT" ? ("credit" as const) : ("debit" as const);
@@ -162,11 +191,12 @@ export async function syncItem(userId: string, pluggyItemId: string) {
         const description = tx.description || tx.descriptionRaw || "";
         const category = categorize({ description, merchant, type, providerCategory: tx.category }, rules, tags);
         const cardLast4 = lastFour(tx.creditCardMetadata?.cardNumber);
+        const parsed = isCard && !tx.creditCardMetadata?.totalInstallments ? installmentFromDescription(description) : null;
         return {
           account_id: local.id,
           pluggy_transaction_id: tx.id,
           provider_reference_scope: `pluggy:${account.id}`,
-          amount_cents: Math.abs(decimalToCents(tx.amount)),
+          amount_cents: Math.abs(decimalToCents(accountAmount(tx, account.currencyCode))),
           type,
           provider_description: description.slice(0, 300),
           merchant,
@@ -177,8 +207,9 @@ export async function syncItem(userId: string, pluggyItemId: string) {
           category_confidence: category?.confidence ?? null,
           category_source: category?.source ?? null,
           card_last4: cardLast4,
-          installment_number: tx.creditCardMetadata?.installmentNumber ?? null,
-          installment_total: tx.creditCardMetadata?.totalInstallments ?? null,
+          installment_number: tx.creditCardMetadata?.installmentNumber ?? parsed?.number ?? null,
+          installment_total: tx.creditCardMetadata?.totalInstallments ?? parsed?.total ?? null,
+          bill_month: isCard ? billMonthOf(tx.creditCardMetadata, dueMonthByBillId) : null,
           // A purchase on the partner's additional card is theirs from the start.
           scope: local.partnerCard && cardLast4 === local.partnerCard ? "partner" : "mine",
         };
@@ -190,6 +221,8 @@ export async function syncItem(userId: string, pluggyItemId: string) {
       if (error) throw new Error(`Falha ao importar movimentações: ${error.message}`);
       imported += Number(data ?? 0);
     }
+    // After the confirmed items, so refunds can be matched with what was already charged.
+    if (isCard) await savePendingCardItems(userId, local.id, txs, dueMonthByBillId, account.currencyCode, rules, tags);
     perAccount.push({ accountId: local.id, imported: rows.length });
   }
 
@@ -267,6 +300,116 @@ export async function disconnectItem(userId: string, pluggyItemId: string, optio
     if (ids.length) await admin.from("transactions").update({ deleted_at: now }).eq("user_id", userId).in("account_id", ids).is("deleted_at", null);
   }
   await admin.from("pluggy_items").update({ deleted_at: now, status: "DELETED" }).eq("user_id", userId).eq("id", row.id);
+}
+
+/** Stores the bank's closed invoices for a card and returns bill id → invoice month. */
+async function saveCardBills(userId: string, accountId: string, pluggyAccountId: string): Promise<Map<string, string>> {
+  const byId = new Map<string, string>();
+  let bills: pluggy.PluggyBill[] = [];
+  try {
+    bills = await pluggy.listBills(pluggyAccountId);
+  } catch {
+    // Some institutions do not report invoices; purchases still carry the forecast month.
+    return byId;
+  }
+  const rows = bills
+    .filter((b) => b.dueDate)
+    .map((b) => {
+      const due = b.dueDate.slice(0, 10);
+      byId.set(b.id, due.slice(0, 7));
+      return {
+        user_id: userId,
+        account_id: accountId,
+        provider_bill_id: b.id,
+        bill_month: due.slice(0, 7),
+        due_date: due,
+        total_cents: decimalToCents(b.totalAmount ?? 0),
+        minimum_cents: b.minimumPaymentAmount != null ? decimalToCents(b.minimumPaymentAmount) : null,
+        payments_cents: (b.payments ?? []).reduce((s, p) => s + Math.abs(decimalToCents(p.amount ?? 0)), 0),
+      };
+    });
+  if (rows.length > 0) {
+    const { error } = await createAdminClient().from("card_bills").upsert(rows, { onConflict: "account_id,bill_month" });
+    if (error) throw new Error(`Falha ao salvar faturas: ${error.message}`);
+  }
+  return byId;
+}
+
+/**
+ * Pending card items (the open invoice and scheduled installments) replace the previous snapshot.
+ * They are shown only in invoices: the bank may re-issue them with another id once posted.
+ */
+async function savePendingCardItems(
+  userId: string,
+  accountId: string,
+  txs: pluggy.PluggyTransaction[],
+  dueMonthByBillId: Map<string, string>,
+  currency: string | null,
+  rules: Awaited<ReturnType<typeof listRules>>,
+  tags: Awaited<ReturnType<typeof listTags>>,
+) {
+  const admin = createAdminClient();
+  const rows = txs
+    .filter((tx) => tx.status === "PENDING")
+    .map((tx) => {
+      const type = tx.type === "CREDIT" ? ("credit" as const) : ("debit" as const);
+      const description = tx.description || tx.descriptionRaw || "";
+      const merchant = tx.merchant?.businessName || tx.merchant?.name || null;
+      const parsed = !tx.creditCardMetadata?.totalInstallments ? installmentFromDescription(description) : null;
+      return {
+        user_id: userId,
+        account_id: accountId,
+        provider_transaction_id: tx.id,
+        bill_month: billMonthOf(tx.creditCardMetadata, dueMonthByBillId),
+        transaction_date: instantToDate(tx.date),
+        description: description.slice(0, 300),
+        amount_cents: Math.abs(decimalToCents(accountAmount(tx, currency))),
+        type,
+        tag_id: categorize({ description, merchant, type, providerCategory: tx.category }, rules, tags)?.tagId ?? null,
+        card_last4: lastFour(tx.creditCardMetadata?.cardNumber),
+        installment_number: tx.creditCardMetadata?.installmentNumber ?? parsed?.number ?? null,
+        installment_total: tx.creditCardMetadata?.totalInstallments ?? parsed?.total ?? null,
+      };
+    })
+    .filter((row) => row.bill_month && row.amount_cents > 0)
+    .map((row) => ({ ...row, cancelled_by_refund: false }));
+
+  // Installments the store already refunded may still be listed as scheduled.
+  const { data: posted } = await admin
+    .from("transactions")
+    .select("id, provider_description, amount_cents, type, installment_number, installment_total, transaction_date")
+    .eq("user_id", userId)
+    .eq("account_id", accountId)
+    .gte("transaction_date", addDays(todayIn(), -400))
+    .is("deleted_at", null)
+    .limit(5000);
+  const confirmed = (posted ?? []).map((t) => ({ ...t, description: (t.provider_description as string | null) ?? "" }));
+  const refunds = [...confirmed, ...rows].filter((t) => isPurchaseRefund({ type: t.type as "credit" | "debit", description: t.description }));
+  const cancelled = refundedInstallmentIds(
+    confirmed.filter((t) => t.type === "debit" && t.installment_total) as InstallmentItem[],
+    rows.filter((r) => r.type === "debit").map((r) => ({ ...r, id: r.provider_transaction_id })),
+    refunds.map((r) => ({ amount_cents: r.amount_cents as number, transaction_date: r.transaction_date as string })),
+  );
+  for (const row of rows) row.cancelled_by_refund = cancelled.has(row.provider_transaction_id);
+
+  const { error: deleteError } = await admin.from("card_pending_items").delete().eq("user_id", userId).eq("account_id", accountId);
+  if (deleteError) throw new Error(`Falha ao atualizar a fatura aberta: ${deleteError.message}`);
+  if (rows.length === 0) return;
+  const { error } = await admin.from("card_pending_items").insert(rows);
+  if (error) throw new Error(`Falha ao salvar a fatura aberta: ${error.message}`);
+}
+
+/** Recent card purchases without an invoice month: imported before months were stored. */
+async function missingBillMonths(accountId: string, since: string): Promise<boolean> {
+  const { count } = await createAdminClient()
+    .from("transactions")
+    .select("id", { count: "exact", head: true })
+    .eq("account_id", accountId)
+    .eq("source", "pluggy")
+    .is("bill_month", null)
+    .gte("transaction_date", since)
+    .is("deleted_at", null);
+  return (count ?? 0) > 0;
 }
 
 function lastFour(value: string | null | undefined): string | null {

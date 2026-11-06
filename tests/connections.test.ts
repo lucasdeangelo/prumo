@@ -16,9 +16,14 @@ describe("connection state", () => {
     expect(connectionState({ ...base, errorCode: "USER_AUTHORIZATION_REVOKED" }, now)).toBe("expired");
   });
 
+  it("is ok while today's update has not happened yet", () => {
+    // Prumo pulled at 06:13, MeuPluggy refreshes at 06:12 but had not finished: data from yesterday.
+    expect(connectionState({ ...base, lastSuccessAt: "2026-11-04T06:12:00Z", lastAttemptAt: "2026-11-05T06:13:00Z" }, now)).toBe("ok");
+  });
+
   it("is failed when today's update did not work", () => {
     expect(connectionState({ ...base, status: "OUTDATED" }, now)).toBe("failed");
-    expect(connectionState({ ...base, lastSuccessAt: "2026-11-04T06:08:00Z" }, now)).toBe("failed");
+    expect(connectionState({ ...base, lastSuccessAt: "2026-11-03T22:00:00Z" }, now)).toBe("failed");
     expect(connectionState({ ...base, errorCode: "SITE_NOT_AVAILABLE" }, now)).toBe("failed");
   });
 });

@@ -60,10 +60,16 @@ export default async function SplitInvoicePage({ params, searchParams }: { param
             <span className="block text-[13px] capitalize text-muted-foreground">{formatDayLabel(invoice.period.due)}</span>
           </span>
           <span className="shrink-0 whitespace-nowrap rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground">
-            {invoice.period.end >= todayIn() ? `Aberta · fecha ${formatDayShort(invoice.period.end)}` : "Fechada"}
+            {!invoice.period.closed ? `Aberta · fecha ${invoice.period.closeEstimated ? "por volta de " : ""}${formatDayShort(invoice.period.end)}` : "Fechada"}
           </span>
         </div>
         <span className="tabular text-[32px] font-medium tracking-[-0.03em]">{formatBRL(Math.max(0, invoice.settlement.totalCents))}</span>
+        {invoice.pendingLines.length > 0 ? (
+          <p className="text-[13px] text-muted-foreground">{invoice.pendingLines.length} {invoice.pendingLines.length === 1 ? "lançamento ainda está" : "lançamentos ainda estão"} em processamento no banco e {invoice.pendingLines.length === 1 ? "entra" : "entram"} aqui quando for confirmado.</p>
+        ) : null}
+        {Math.abs(invoice.carriedCents) >= 100 ? (
+          <p className="text-[13px] text-muted-foreground">Compras desta fatura. A fatura do banco é {formatBRL(invoice.totalCents)} com saldo anterior, parcelamentos e encargos.</p>
+        ) : null}
         <SegmentBar
           total={Math.max(1, invoice.settlement.totalCents)}
           label="Nosso, de cada um"

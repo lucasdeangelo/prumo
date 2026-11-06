@@ -1,11 +1,11 @@
 import "server-only";
 
 import { invoiceSettlement } from "@/lib/domain/couple";
-import { addMonths, todayIn } from "@/lib/domain/dates";
+import { todayIn } from "@/lib/domain/dates";
 import { partnerMayReassign, projectForPartner, type OwnedAccount } from "@/lib/domain/visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { invoicePeriod, loadAccounts, loadCategoryNames, loadFacts, loadSplitRules, shareFor, toOwned, type AccountRow, type FactRow } from "./couple-data";
+import { loadAccounts, loadCategoryNames, loadSplitRules, resolveInvoice, shareFor, toOwned, type AccountRow, type FactRow } from "./couple-data";
 import { getHousehold, type Household } from "./household";
 import { DomainError } from "./transactions";
 
@@ -35,15 +35,19 @@ export type InvoiceLine = {
 /** One card invoice (period containing `ref`, shifted by `offset` months) as the viewer may see it. */
 export async function loadInvoice(viewerId: string, household: Household | null, card: AccountRow, offset = 0) {
   const today = todayIn();
-  const ref = addMonths(today, offset);
-  const period = invoicePeriod(card, ref);
-  const [facts, categories, rules] = await Promise.all([
-    loadFacts([card.user_id], period.start, period.end),
+  const [window, categories, rules] = await Promise.all([
+    resolveInvoice(card, offset, today),
     loadCategoryNames([card.user_id]),
     household ? loadSplitRules(household.id) : Promise.resolve(new Map()),
   ]);
-  const items = facts.filter((f) => f.account_id === card.id && f.transaction_date > period.start && f.transaction_date <= period.end);
+  const { period, items, paymentsCents, carriedCents, totalCents } = window;
   const holderIsViewer = card.user_id === viewerId;
+  // Pending items have no per-item privacy yet: the partner sees them only on a "details" card.
+  const cancelledLines = holderIsViewer || card.visibility === "details" ? window.cancelled : [];
+  const pendingLines =
+    holderIsViewer || card.visibility === "details"
+      ? window.pending.map((item) => ({ item, category: (item.tag_id ? categories.get(item.tag_id)?.name : null) ?? "Outros" }))
+      : [];
 
   const lines: InvoiceLine[] = [];
   for (const fact of items) {
@@ -69,9 +73,14 @@ export async function loadInvoice(viewerId: string, household: Household | null,
   );
   const holderTotals = { ours: settlement.oursCents, holder: settlement.holderCents, partner: settlement.partnerCents };
 
-  // Installments still to come, from purchases charged in this invoice.
+  // Installments still to come: scheduled by the bank when it reports them, else from this invoice.
   const ahead: number[] = [];
-  for (const fact of items) {
+  for (const { month, cents } of window.ahead) {
+    const index = monthsBetween(period.month, month) - 1;
+    if (index >= 0 && index < 24) ahead[index] = (ahead[index] ?? 0) + cents;
+  }
+  for (let i = 0; i < ahead.length; i += 1) ahead[i] ??= 0;
+  if (window.ahead.length === 0) for (const fact of items) {
     if (!fact.installment_number || !fact.installment_total || fact.installment_number >= fact.installment_total || fact.type !== "debit") continue;
     const remaining = fact.installment_total - fact.installment_number;
     for (let i = 0; i < remaining; i += 1) ahead[i] = (ahead[i] ?? 0) + fact.amount_cents;
@@ -80,7 +89,7 @@ export async function loadInvoice(viewerId: string, household: Household | null,
     ? (await createAdminClient().from("settlements").select("amount_cents, settled_at").eq("household_id", household.id).eq("kind", "invoice").eq("reference", `${card.id}:${period.month}`).maybeSingle()).data
     : null;
 
-  return { card, period, lines, settlement, holderTotals, holderIsViewer, installmentsAhead: ahead, settled: settledRow as { amount_cents: number; settled_at: string } | null };
+  return { card, period, lines, pendingLines, cancelledLines, settlement, holderTotals, holderIsViewer, installmentsAhead: ahead, paymentsCents, carriedCents, totalCents, settled: settledRow as { amount_cents: number; settled_at: string } | null };
 }
 
 /** Changes whose a purchase is ("Nosso", the holder's or the partner's). Either person may do it for lines they see. */
@@ -170,4 +179,10 @@ export async function recordInvoiceSettlement(viewerId: string, cardId: string, 
     settled_by: viewerId,
   });
   if (error && error.code !== "23505") throw new Error(`Falha ao registrar acerto: ${error.message}`);
+}
+
+function monthsBetween(from: string, to: string): number {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  return (ty - fy) * 12 + (tm - fm);
 }

@@ -28,7 +28,9 @@ export function connectionState(input: { status: string | null; errorCode: strin
   if (input.consentExpiresAt && new Date(input.consentExpiresAt).getTime() < now.getTime()) return "expired";
   if (input.status === "LOGIN_ERROR" || (input.errorCode && EXPIRED_CODES.has(input.errorCode))) return "expired";
   if (input.status === "OUTDATED" || input.errorCode) return "failed";
-  if (input.lastAttemptAt && input.lastSuccessAt && input.lastSuccessAt.slice(0, 10) < input.lastAttemptAt.slice(0, 10)) return "failed";
+  // MeuPluggy updates once a day at its own time. Data from yesterday is normal until that time
+  // passes; only a missed daily update (no success for 36 hours) counts as a failure.
+  if (input.lastSuccessAt && now.getTime() - new Date(input.lastSuccessAt).getTime() > 36 * 3600_000) return "failed";
   return "ok";
 }
 

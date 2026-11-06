@@ -7,7 +7,9 @@ import { Card, EmptyState } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
 import { lastSyncAt, loadAccounts, loadCategoryNames, loadFacts, toOwned } from "@/lib/application/couple-data";
 import { getHousehold } from "@/lib/application/household";
-import { formatDayShort, monthBounds, todayIn } from "@/lib/domain/dates";
+import { overdraftFor, overdraftNow } from "@/lib/application/overdraft";
+import { OverdraftCard } from "@/components/app/overdraft-card";
+import { formatDayShort, formatMonthLong, monthBounds, todayIn } from "@/lib/domain/dates";
 import { formatBRL } from "@/lib/domain/money";
 import { partnerAccountsView } from "@/lib/domain/visibility";
 
@@ -29,6 +31,8 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
   const { start, end } = monthBounds(today.slice(0, 7));
   const [facts, categories, syncedAt] = await Promise.all([loadFacts([account.user_id], start, end), loadCategoryNames([account.user_id]), lastSyncAt([account.user_id])]);
   const own = facts.filter((f) => f.account_id === id).map(toOwned);
+  const overdraft = mine ? overdraftNow(account) : null;
+  const overdraftMonthItems = mine ? (await overdraftFor(user.id, today.slice(0, 7))).filter((o) => o.account.id === id) : [];
   const ownerName = mine ? household?.me.name ?? "Você" : household!.partner!.name;
   const view = mine
     ? { lines: own.map((t) => ({ kind: "detail" as const, id: t.id, label: t.label, tagId: t.tag_id, amountCents: t.amount_cents, type: t.type, date: t.transaction_date, scope: t.scope })), monthOutCents: own.filter((t) => t.type === "debit").reduce((s, t) => s + t.amount_cents, 0) }
@@ -45,6 +49,14 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
         </span>
         <VisibilityBadge kind={account.visibility} />
       </Card>
+      {overdraft ? (
+        <Card className="grid grid-cols-3 gap-2 text-[13px]">
+          <span><span className="block text-muted-foreground">Cheque especial</span><span className="tabular font-medium">{formatBRL(overdraft.limitCents)}</span></span>
+          <span><span className="block text-muted-foreground">Em uso</span><span className="tabular font-medium">{formatBRL(overdraft.usedCents)}</span></span>
+          <span><span className="block text-muted-foreground">Disponível com limite</span><span className="tabular font-medium">{formatBRL(overdraft.availableCents)}</span></span>
+        </Card>
+      ) : null}
+      <OverdraftCard items={overdraftMonthItems} monthLabel={formatMonthLong(today.slice(0, 7)).split(" ")[0].toLowerCase()} />
       <UpdatedAt at={syncedAt} />
       <p className="text-sm text-muted-foreground">Saiu {formatBRL(view.monthOutCents)} neste mês.</p>
 

@@ -17,6 +17,18 @@ export const metadata = { title: "Conexão · Prumo" };
 
 const dateTime = new Intl.DateTimeFormat("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
 const day = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
+const hour = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+
+/** MeuPluggy refreshes about 24 hours after the last update. */
+function nextUpdateLabel(lastSuccessAt: string | null): string | null {
+  if (!lastSuccessAt) return null;
+  let next = new Date(lastSuccessAt).getTime() + 24 * 3600_000;
+  while (next < Date.now() - 2 * 3600_000) next += 24 * 3600_000;
+  const date = new Date(next);
+  const today = day.format(new Date());
+  const label = day.format(date) === today ? "hoje" : day.format(date) === day.format(new Date(Date.now() + 24 * 3600_000)) ? "amanhã" : day.format(date);
+  return `${label} por volta das ${hour.format(date)}`;
+}
 
 export default async function ConnectionPage({ params }: { params: Promise<{ itemId: string }> }) {
   const { itemId } = await params;
@@ -29,6 +41,7 @@ export default async function ConnectionPage({ params }: { params: Promise<{ ite
   const institution = group.map((g) => g.institution).join(", ");
   const partnerName = household?.partner?.name;
   const dataUntil = c.lastSuccessAt ? day.format(new Date(c.lastSuccessAt)) : "—";
+  const nextUpdate = nextUpdateLabel(c.lastSuccessAt);
 
   if (c.state === "expired") {
     const main = accounts.find((a) => a.type !== "CREDIT") ?? accounts[0];
@@ -77,12 +90,13 @@ export default async function ConnectionPage({ params }: { params: Promise<{ ite
           {c.state === "failed" ? (
             <>
               <p className="text-[15px] font-medium">A atualização de hoje não funcionou</p>
-              <p className="text-sm text-muted-foreground">O banco não respondeu ao MeuPluggy. Nova tentativa amanhã, por volta das 6h. Seus dados estão de {dataUntil}.</p>
+              <p className="text-sm text-muted-foreground">O MeuPluggy não conseguiu atualizar com o banco. Seus dados estão de {dataUntil}.{nextUpdate ? ` Nova tentativa ${nextUpdate}.` : ""}</p>
             </>
           ) : (
             <>
               <p className="text-[15px] font-medium">Tudo certo</p>
               <UpdatedAt at={c.lastSuccessAt} />
+              {nextUpdate ? <p className="text-[13px] text-muted-foreground">Próxima atualização do MeuPluggy: {nextUpdate}. Depois disso, toque em “Sincronizar agora”.</p> : null}
             </>
           )}
         </div>
@@ -107,6 +121,15 @@ export default async function ConnectionPage({ params }: { params: Promise<{ ite
         <p className="text-sm text-muted-foreground">O MeuPluggy busca os dados do banco uma vez por dia. Se uma falha se repetir por 3 dias, avisamos para você conferir a conexão no MeuPluggy. O botão abaixo só traz o que o MeuPluggy já tem.</p>
       </Card>
       <SyncButton itemId={itemId} />
+      <Card className="grid gap-2">
+        <p className="text-[15px] font-medium">Falta algum banco?</p>
+        <p className="text-sm text-muted-foreground">
+          No MeuPluggy, cada banco é autorizado separadamente. Conectou outro banco lá? Autorize aqui também e escolha esse banco na tela do MeuPluggy. Ele entra como uma conexão nova, sem mexer nesta.
+        </p>
+        <Link href="/connect?step=5" className="inline-flex min-h-12 items-center justify-center rounded-full border border-foreground px-6 text-[15px] font-medium text-foreground hover:text-foreground">
+          Conectar outro banco
+        </Link>
+      </Card>
       <a href="https://meu.pluggy.ai" target="_blank" rel="noreferrer" className="inline-flex min-h-12 items-center justify-center rounded-full border border-foreground px-6 text-[15px] font-medium text-foreground hover:text-foreground">
         Ver a conexão no MeuPluggy
       </a>

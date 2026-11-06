@@ -1,5 +1,6 @@
 import "server-only";
 
+import { addMonthKey, carriedFrom, dueDateFor, isCardPayment, netCents, openBillMonth, withoutInternalPairs } from "@/lib/domain/card-invoice";
 import { budgetStatus, firstShare, freeMoneyStatus, goalProgress, invoiceSettlement, type SplitMethod } from "@/lib/domain/couple";
 import { addDays, addMonths, monthBounds, todayIn } from "@/lib/domain/dates";
 import { partnerAccountsView, type OwnedAccount, type OwnedTransaction } from "@/lib/domain/visibility";
@@ -30,13 +31,15 @@ export type FactRow = {
   card_last4: string | null;
   installment_number: number | null;
   installment_total: number | null;
+  /** Invoice month reported by the bank for card purchases ("2026-12"). */
+  bill_month: string | null;
   split_method: SplitMethod | null;
   split_share: number | null;
   source: string;
 };
 
 const FACT_COLUMNS =
-  "id, user_id, account_id, amount_cents, type, transaction_date, user_description, provider_description, merchant, normalized_merchant, tag_id, scope, privacy, surprise_until, surprise_hide_amount, free_money, card_last4, installment_number, installment_total, split_method, split_share, source";
+  "id, user_id, account_id, amount_cents, type, transaction_date, user_description, provider_description, merchant, normalized_merchant, tag_id, scope, privacy, surprise_until, surprise_hide_amount, free_money, card_last4, installment_number, installment_total, bill_month, split_method, split_share, source";
 
 export type AccountRow = OwnedAccount & {
   user_id: string;
@@ -48,6 +51,8 @@ export type AccountRow = OwnedAccount & {
   available_limit_cents: number | null;
   bill_close_date: string | null;
   bill_due_date: string | null;
+  overdraft_limit_cents: number | null;
+  overdraft_used_cents: number | null;
   card_last4: string | null;
   partner_card_last4: string | null;
   pluggy_item_id: string | null;
@@ -55,7 +60,7 @@ export type AccountRow = OwnedAccount & {
 };
 
 const ACCOUNT_COLUMNS =
-  "id, user_id, name, type, subtype, institution, visibility, balance_cents, balance_synced_at, is_manual, credit_limit_cents, available_limit_cents, bill_close_date, bill_due_date, card_last4, partner_card_last4, pluggy_item_id, import_enabled";
+  "id, user_id, name, type, subtype, institution, visibility, balance_cents, balance_synced_at, is_manual, credit_limit_cents, available_limit_cents, bill_close_date, bill_due_date, overdraft_limit_cents, overdraft_used_cents, card_last4, partner_card_last4, pluggy_item_id, import_enabled";
 
 export async function loadFacts(userIds: string[], from: string, to: string): Promise<FactRow[]> {
   const { data, error } = await createAdminClient()
@@ -186,18 +191,18 @@ export async function goalsOverview(householdId: string, today: string) {
   });
 }
 
-/** The shared view of every card account in the household for the invoice period containing `today`. */
+/** The shared view of every card account in the household for the open invoice. */
 export async function cardInvoices(household: Household, accounts: AccountRow[], today: string) {
   const memberIds = [household.me.userId, household.partner?.userId].filter(Boolean) as string[];
   const cards = accounts.filter((a) => a.type === "CREDIT" && (a.user_id === household.me.userId || a.visibility !== "private"));
   if (cards.length === 0) return [];
-  const from = addMonths(today, -2);
-  const facts = (await loadFacts(memberIds, from, addMonths(today, 1))).filter((f) => cards.some((c) => c.id === f.account_id));
-  const rules = await loadSplitRules(household.id);
-  const categories = await loadCategoryNames(memberIds);
-  return cards.map((card) => {
-    const period = invoicePeriod(card, today);
-    const items = facts.filter((f) => f.account_id === card.id && f.transaction_date > period.start && f.transaction_date <= period.end);
+  const [rules, categories, windows] = await Promise.all([
+    loadSplitRules(household.id),
+    loadCategoryNames(memberIds),
+    Promise.all(cards.map((card) => resolveInvoice(card, 0, today))),
+  ]);
+  return cards.map((card, i) => {
+    const { period, items, totalCents, pending } = windows[i];
     const holderIsMe = card.user_id === household.me.userId;
     const settlement = invoiceSettlement(
       items.map((f) => {
@@ -211,8 +216,140 @@ export async function cardInvoices(household: Household, accounts: AccountRow[],
         };
       }),
     );
-    return { card, holderIsMe, period, items, settlement };
+    return { card, holderIsMe, period, items, pending, settlement, totalCents };
   });
+}
+
+export type PendingCardItem = {
+  id: string;
+  bill_month: string;
+  transaction_date: string;
+  description: string;
+  amount_cents: number;
+  type: "credit" | "debit";
+  tag_id: string | null;
+  card_last4: string | null;
+  installment_number: number | null;
+  installment_total: number | null;
+  /** The store refunded the purchase; the bank still lists this installment as scheduled. */
+  cancelled_by_refund: boolean;
+};
+
+export type InvoiceWindow = {
+  period: {
+    start: string;
+    /** Close date; estimated when the bank does not report it. */
+    end: string;
+    due: string;
+    /** Invoice month = due month ("2026-12"). */
+    month: string;
+    status: "closed" | "open" | "future";
+    closed: boolean;
+    closeEstimated: boolean;
+  };
+  /** Confirmed purchases, refunds and charges of this invoice, without payments. */
+  items: FactRow[];
+  /** Items the bank still shows as pending (open invoice, scheduled installments). */
+  pending: PendingCardItem[];
+  /** Scheduled installments of refunded purchases: shown, never counted. */
+  cancelled: PendingCardItem[];
+  paymentsCents: number;
+  /** Unpaid rest of the previous invoice, rolled into this one (open invoice). */
+  carriedCents: number;
+  /** The bank's total for a closed invoice; otherwise what is known so far. */
+  totalCents: number;
+  /** Installment totals of the following invoices already scheduled by the bank. */
+  ahead: Array<{ month: string; cents: number }>;
+};
+
+const PENDING_COLUMNS = "id, bill_month, transaction_date, description, amount_cents, type, tag_id, card_last4, installment_number, installment_total, cancelled_by_refund";
+
+/**
+ * One invoice of a card, `offset` months from the open one. Cards connected through Open Finance
+ * use the invoice the bank assigned to each item and the bank's closed totals; manual cards use
+ * the close/due dates (or the calendar month).
+ */
+export async function resolveInvoice(card: AccountRow, offset: number, today: string): Promise<InvoiceWindow> {
+  const admin = createAdminClient();
+  const [{ data: bills }, { data: latest }, { data: pendingRows }] = await Promise.all([
+    admin.from("card_bills").select("bill_month, due_date, total_cents, payments_cents").eq("account_id", card.id).eq("user_id", card.user_id).order("bill_month", { ascending: false }).limit(24),
+    admin.from("transactions").select("bill_month").eq("account_id", card.id).eq("user_id", card.user_id).not("bill_month", "is", null).is("deleted_at", null).order("bill_month", { ascending: false }).limit(1),
+    admin.from("card_pending_items").select(PENDING_COLUMNS).eq("account_id", card.id).eq("user_id", card.user_id).order("transaction_date", { ascending: false }).limit(1000),
+  ]);
+  const closed = (bills ?? []) as Array<{ bill_month: string; due_date: string; total_cents: number; payments_cents: number }>;
+  const latestAssigned = (latest ?? []).map((r) => r.bill_month as string);
+  const pendingAndCancelled = (pendingRows ?? []) as PendingCardItem[];
+  const allPending = pendingAndCancelled.filter((p) => !p.cancelled_by_refund);
+
+  if (closed.length > 0 || latestAssigned.length > 0) {
+    const open = openBillMonth(closed.map((b) => b.bill_month), latestAssigned, today);
+    const month = addMonthKey(open, offset);
+    const bill = closed.find((b) => b.bill_month === month) ?? null;
+    const status = bill || month < open ? "closed" : month === open ? "open" : "future";
+    const usualDue = card.bill_due_date ?? closed[0]?.due_date ?? null;
+    const due = dueDateFor(month, bill?.due_date ?? null, usualDue);
+    const { data, error } = await admin
+      .from("transactions")
+      .select(FACT_COLUMNS)
+      .eq("account_id", card.id)
+      .eq("user_id", card.user_id)
+      .eq("bill_month", month)
+      .is("deleted_at", null)
+      .order("transaction_date", { ascending: false })
+      .limit(2000);
+    if (error) throw new Error(`Falha ao carregar a fatura: ${error.message}`);
+    const facts = (data ?? []) as FactRow[];
+    // Stale pending items of invoices already closed are ignored.
+    const pendingHere = status === "closed" ? [] : allPending.filter((p) => p.bill_month === month);
+    const kept = new Set(
+      withoutInternalPairs(facts.filter((f) => !isCardPayment(f)).map((f) => ({ ...f, description: f.provider_description ?? f.user_description ?? "" }))).map((f) => f.id),
+    );
+    const factsShown = facts.filter((f) => kept.has(f.id));
+    const pendingShown = withoutInternalPairs(pendingHere.filter((p) => !isCardPayment({ type: p.type, provider_description: p.description })));
+    const paymentsCents =
+      facts.filter((f) => isCardPayment(f)).reduce((s, f) => s + f.amount_cents, 0) +
+      pendingHere.filter((p) => isCardPayment({ type: p.type, provider_description: p.description })).reduce((s, p) => s + p.amount_cents, 0);
+    const previous = closed.find((b) => b.bill_month === addMonthKey(month, -1));
+    const carriedCents = status === "open" ? carriedFrom(previous) : 0;
+    const known = netCents(factsShown) + netCents(pendingShown);
+    const totalCents = bill ? bill.total_cents : known + carriedCents;
+    const ahead = new Map<string, number>();
+    for (const p of allPending) {
+      if (p.bill_month <= month || isCardPayment({ type: p.type, provider_description: p.description })) continue;
+      ahead.set(p.bill_month, (ahead.get(p.bill_month) ?? 0) + (p.type === "debit" ? p.amount_cents : -p.amount_cents));
+    }
+    const closeKnown = card.bill_close_date ? alignDue(card.bill_close_date, addDays(due, -20)) : null;
+    const end = closeKnown && closeKnown <= due ? closeKnown : addDays(due, -7);
+    const dates = [...factsShown, ...pendingShown].map((f) => f.transaction_date);
+    const start = dates.reduce((min, d) => (d < min ? d : min), addMonths(end, -1));
+    return {
+      period: { start, end, due, month, status, closed: status === "closed", closeEstimated: !closeKnown },
+      items: factsShown,
+      pending: pendingShown,
+      cancelled: status === "closed" ? [] : pendingAndCancelled.filter((p) => p.cancelled_by_refund && p.bill_month === month),
+      paymentsCents,
+      carriedCents: bill ? bill.total_cents - known : carriedCents,
+      totalCents,
+      ahead: [...ahead.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([m, cents]) => ({ month: m, cents })),
+    };
+  }
+
+  const period = invoicePeriod(card, addMonths(today, offset));
+  const facts = (await loadFacts([card.user_id], period.start, period.end)).filter(
+    (f) => f.account_id === card.id && f.transaction_date > period.start && f.transaction_date <= period.end,
+  );
+  const items = facts.filter((f) => !isCardPayment(f));
+  const status = period.end < today ? "closed" : "open";
+  return {
+    period: { ...period, status, closed: status === "closed", closeEstimated: !card.bill_close_date },
+    items,
+    pending: [],
+    cancelled: [],
+    paymentsCents: facts.filter((f) => isCardPayment(f)).reduce((s, f) => s + f.amount_cents, 0),
+    carriedCents: 0,
+    totalCents: netCents(items),
+    ahead: [],
+  };
 }
 
 /** Invoice window: from the last close date (exclusive) to the next close date (inclusive). */

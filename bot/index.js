@@ -1,5 +1,8 @@
 require("dotenv").config();
 
+const os = require("node:os");
+const path = require("node:path");
+
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 
@@ -13,7 +16,9 @@ const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2:1b";
 const AI_ENABLED = process.env.AI_ENABLED !== "false";
 const OUTBOX_INTERVAL_MS = Number(process.env.OUTBOX_INTERVAL_MS || 30000);
-const SESSION_PATH = process.env.WHATSAPP_SESSION_PATH || "./session";
+// Outside the app folder: the WhatsApp browser profile changes every few seconds, and inside the
+// project it makes `next dev` recompile in a loop.
+const SESSION_PATH = process.env.WHATSAPP_SESSION_PATH || path.join(os.homedir(), ".prumo-bot", "session");
 
 const api = createApi({ baseUrl: APP_URL, secret: (process.env.INTERNAL_API_SECRET || "").trim() });
 const ai = AI_ENABLED ? createAi({ url: OLLAMA_URL, model: OLLAMA_MODEL }) : null;

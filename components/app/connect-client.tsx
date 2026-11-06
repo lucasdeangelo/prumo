@@ -40,7 +40,7 @@ export function AuthorizeButton() {
       theme: "light",
       onSuccess: ({ item }) => start(async () => staged(await stageConnectionAction(item.id))),
       onError: ({ message }) => {
-        // The MeuPluggy connection is one per person; reuse it instead of failing.
+        // Older connect tokens could still refuse a second bank; fall back to the last connection.
         if (message.includes("ITEM_USER_ALREADY_EXISTS")) start(async () => staged(await stageExistingAction()));
         else setError(`Pluggy: ${message}`);
       },
