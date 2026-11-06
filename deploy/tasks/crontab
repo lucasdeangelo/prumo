@@ -1,0 +1,5 @@
+# Times in America/Sao_Paulo (TZ of the container).
+# Reminders of bills and subscriptions (the bot sends them on WhatsApp).
+0 8 * * * /usr/local/bin/notify.sh
+# Database backup to ./backups, older files removed.
+30 3 * * * /usr/local/bin/backup.sh

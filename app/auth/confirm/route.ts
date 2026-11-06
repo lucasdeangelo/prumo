@@ -1,6 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { publicOrigin } from "@/lib/request-origin";
 import { safeRelativePath } from "@/lib/safe-path";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -21,5 +22,5 @@ export async function GET(request: NextRequest) {
   } else if (code) {
     ok = !(await supabase.auth.exchangeCodeForSession(code)).error;
   }
-  return NextResponse.redirect(new URL(ok ? next : "/login?erro=link", url.origin));
+  return NextResponse.redirect(new URL(ok ? next : "/login?erro=link", publicOrigin(request)));
 }

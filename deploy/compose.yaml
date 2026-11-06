@@ -1,0 +1,127 @@
+# Prumo on one machine. Database and login stay on Supabase Cloud.
+#
+#   cd deploy && cp .env.example .env   # fill it in (see docs/DEPLOY.md)
+#   docker compose up -d --build
+#
+# Services (one process each):
+#   app         Next.js: pages, server actions, /api (webhook, bot API, cron endpoint)
+#   nginx       in front of the app: LAN access on LAN_PORT and origin for the tunnel
+#   cloudflared public HTTPS through Cloudflare Tunnel (no router ports opened)
+#   bot         WhatsApp (whatsapp-web.js + Chromium), session in the bot-data volume
+#   ollama      small local model for the bot (optional: AI_ENABLED=false skips it)
+#   tasks       daily notifications cron and database backup (pg_dump to ./backups)
+
+name: prumo
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  app:
+    <<: *restart
+    build:
+      context: ..
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?defina no .env}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?defina no .env}
+        NEXT_PUBLIC_WHATSAPP_BOT_NUMBER: ${NEXT_PUBLIC_WHATSAPP_BOT_NUMBER:-}
+    image: prumo-app
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
+      NEXT_PUBLIC_WHATSAPP_BOT_NUMBER: ${NEXT_PUBLIC_WHATSAPP_BOT_NUMBER:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?defina no .env}
+      APP_URL: ${APP_URL:?defina no .env}
+      PLUGGY_CLIENT_ID: ${PLUGGY_CLIENT_ID:-}
+      PLUGGY_CLIENT_SECRET: ${PLUGGY_CLIENT_SECRET:-}
+      PLUGGY_INCLUDE_SANDBOX: ${PLUGGY_INCLUDE_SANDBOX:-false}
+      PLUGGY_WEBHOOK_SECRET: ${PLUGGY_WEBHOOK_SECRET:-}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?defina no .env}
+      CRON_SECRET: ${CRON_SECRET:?defina no .env}
+      TZ: America/Sao_Paulo
+    expose:
+      - "3000"
+
+  nginx:
+    <<: *restart
+    image: nginx:1.27-alpine
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      # LAN access (http://<fedora>:8080). Public access goes through the tunnel.
+      - "${LAN_PORT:-8080}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro,Z
+
+  cloudflared:
+    <<: *restart
+    image: cloudflare/cloudflared:2024.12.2
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+      # QUIC (UDP 7844) is often blocked by home routers; HTTP/2 goes over TCP 443.
+      TUNNEL_TRANSPORT_PROTOCOL: http2
+    depends_on:
+      - nginx
+    profiles: ["public"]
+
+  bot:
+    <<: *restart
+    build:
+      context: ../bot
+    image: prumo-bot
+    environment:
+      # The bot talks to the app inside the compose network; nothing is exposed for it.
+      PRUMO_APP_URL: http://app:3000
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
+      AI_ENABLED: ${AI_ENABLED:-true}
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
+      OUTBOX_INTERVAL_MS: ${OUTBOX_INTERVAL_MS:-30000}
+    volumes:
+      - bot-data:/data
+    shm_size: "512m"
+    depends_on:
+      app:
+        condition: service_healthy
+
+  ollama:
+    <<: *restart
+    image: ollama/ollama:0.5.7
+    volumes:
+      - ollama-models:/root/.ollama
+    expose:
+      - "11434"
+
+  # One-shot: downloads the bot's model into the ollama volume (re-run after changing OLLAMA_MODEL).
+  ollama-pull:
+    image: ollama/ollama:0.5.7
+    entrypoint: ["/bin/sh", "-c", "sleep 3 && ollama pull \"$$OLLAMA_MODEL\""]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
+    depends_on:
+      - ollama
+    restart: "no"
+
+  tasks:
+    <<: *restart
+    build:
+      context: ./tasks
+    image: prumo-tasks
+    environment:
+      CRON_SECRET: ${CRON_SECRET}
+      APP_INTERNAL_URL: http://app:3000
+      SUPABASE_DB_URL: ${SUPABASE_DB_URL:-}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      TZ: America/Sao_Paulo
+    volumes:
+      - ./backups:/backups:Z
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  bot-data:
+  ollama-models:

@@ -1,0 +1,16 @@
+# Keep secrets, local state and other services out of the app image.
+.git
+node_modules
+.next
+coverage
+*.tsbuildinfo
+.env*
+!.env.example
+bot
+deploy
+docs
+tests
+supabase/.temp
+supabase/.branches
+.vercel
+.claude

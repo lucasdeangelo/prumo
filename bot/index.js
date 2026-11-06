@@ -27,7 +27,12 @@ const conversation = createConversation({ api, ai });
 // ==================== CLIENTE WHATSAPP ====================
 const client = new Client({
   authStrategy: new LocalAuth({ clientId: "prumo-bot", dataPath: SESSION_PATH }),
-  puppeteer: { headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] },
+  puppeteer: {
+    headless: true,
+    // In Docker the system Chromium is used (PUPPETEER_EXECUTABLE_PATH); locally puppeteer's own.
+    ...(process.env.PUPPETEER_EXECUTABLE_PATH ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH } : {}),
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+  },
 });
 
 let ready = false;
