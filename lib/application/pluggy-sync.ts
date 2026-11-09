@@ -272,6 +272,36 @@ export async function refreshAndSyncItem(userId: string, pluggyItemId: string, m
   return { ...(await syncItem(userId, pluggyItemId)), stillUpdating };
 }
 
+/**
+ * Scheduled safety net (tasks container, every 15 min): imports every connection whose data at
+ * Pluggy is newer than our last import. MeuPluggy updates once a day and the webhook may be
+ * missing or lost; this keeps the delay to one interval. Cheap when nothing changed: one
+ * GET /items per connection.
+ */
+export async function syncStaleItems() {
+  const { data: rows, error } = await createAdminClient()
+    .from("pluggy_items")
+    .select("user_id, pluggy_item_id, last_sync_at")
+    .is("deleted_at", null);
+  if (error) throw new Error(`Falha ao listar conexões: ${error.message}`);
+  const result = { checked: 0, synced: 0, failed: 0 };
+  for (const row of rows ?? []) {
+    result.checked += 1;
+    try {
+      const item = await pluggy.getItem(row.pluggy_item_id as string);
+      if (item.status !== "UPDATED" || !item.lastUpdatedAt) continue;
+      const last = row.last_sync_at ? Date.parse(row.last_sync_at as string) : 0;
+      if (Date.parse(item.lastUpdatedAt) <= last) continue;
+      await syncItem(row.user_id as string, row.pluggy_item_id as string);
+      result.synced += 1;
+    } catch {
+      // One failing connection must not stop the others; the next run tries again.
+      result.failed += 1;
+    }
+  }
+  return result;
+}
+
 /** Webhook entry point: finds the owner from our own records, never from the payload alone. */
 export async function syncFromWebhook(pluggyItemId: string) {
   const { data } = await createAdminClient().from("pluggy_items").select("user_id").eq("pluggy_item_id", pluggyItemId).is("deleted_at", null);

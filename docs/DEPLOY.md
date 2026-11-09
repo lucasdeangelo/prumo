@@ -19,7 +19,7 @@ Nenhuma porta do roteador precisa ser aberta. Só o nginx publica uma porta (808
 | `cloudflared` | Endereço público HTTPS (perfil `public`) | — |
 | `bot` | WhatsApp (whatsapp-web.js + Chromium) | volume `prumo_bot-data` (sessão) |
 | `ollama` / `ollama-pull` | Modelo pequeno do bot; o segundo só baixa o modelo | volume `prumo_ollama-models` |
-| `tasks` | 08:00 lembretes; 03:30 backup do banco | `deploy/backups/` |
+| `tasks` | 08:00 lembretes; a cada 15 min, dados novos dos bancos; 03:30 backup do banco | `deploy/backups/` |
 
 ---
 
@@ -72,7 +72,7 @@ Pré-requisito: um domínio gerenciado pela Cloudflare (plano gratuito).
 3. Em **Public Hostname**: subdomínio `prumo`, domínio `seudominio.com.br`, Service **HTTP** e URL **`nginx:80`**.
 4. Use o mesmo endereço em `APP_URL` (ex.: `https://prumo.seudominio.com.br`).
 
-Para rodar só na rede de casa, deixe `COMPOSE_PROFILES=` vazio. Nesse caso, a sincronização com o Pluggy fica manual (sem webhook).
+Para rodar só na rede de casa, deixe `COMPOSE_PROFILES=` vazio. Sem webhook, os dados novos dos bancos chegam pela verificação a cada 15 minutos do `tasks`.
 
 ## 4. Supabase (login)
 
@@ -130,7 +130,7 @@ docker run --rm --env-file .env -v "$PWD/../scripts:/s:ro,Z" node:22-alpine \
   sh -c 'node /s/pluggy-webhook.mjs "$APP_URL"'
 ```
 
-Saída esperada: `Registrado: https://…/api/webhooks/pluggy`. A partir daí, quando o MeuPluggy fizer a atualização diária, o Prumo sincroniza sozinho. O webhook vale para o cliente Pluggy inteiro: o ambiente de desenvolvimento passa a não receber eventos, o que é o esperado.
+Saída esperada: `Registrado: https://…/api/webhooks/pluggy`. A partir daí, quando o MeuPluggy fizer a atualização diária, o Prumo sincroniza na hora. Sem webhook (ou se um aviso se perder), o `tasks` verifica a cada 15 minutos se algum banco tem dados mais novos e importa: `docker compose logs tasks | grep sync`. O webhook vale para o cliente Pluggy inteiro: o ambiente de desenvolvimento passa a não receber eventos, o que é o esperado.
 
 ## 8. Backups
 

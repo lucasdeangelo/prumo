@@ -1,5 +1,7 @@
 # Times in America/Sao_Paulo (TZ of the container).
 # Reminders of bills and subscriptions (the bot sends them on WhatsApp).
 0 8 * * * /usr/local/bin/notify.sh
+# Bank data: imports what MeuPluggy updated since the last import.
+*/15 * * * * /usr/local/bin/sync.sh
 # Database backup to ./backups, older files removed.
 30 3 * * * /usr/local/bin/backup.sh
