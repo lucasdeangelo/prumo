@@ -42,6 +42,11 @@ precisa de um build de desenvolvimento, não do Expo Go. Para builds na nuvem: `
 No Android físico, `EXPO_PUBLIC_API_URL` precisa ser o IP da máquina na rede (ex.: `http://192.168.0.10:3000`),
 não `localhost`.
 
+### Versão de produção (APK)
+
+O APK aponta para o servidor de produção (`EXPO_PUBLIC_API_URL` = `APP_URL`) e é baixado em
+`APP_URL/download/prumo.apk`. Passo a passo em `docs/DEPLOY.md`, seção “App Android”.
+
 ## Desempenho
 
 - Dados prontos do servidor: o Início recebe os totais do gráfico de 6 meses, não milhares de movimentações.

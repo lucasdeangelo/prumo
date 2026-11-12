@@ -18,7 +18,7 @@ Nenhuma porta do roteador precisa ser aberta. Só o nginx publica uma porta (808
 | `nginx` | Entrada única: rede local e origem do túnel; cabeçalhos de segurança | — |
 | `cloudflared` | Endereço público HTTPS (perfil `public`) | — |
 | `bot` | WhatsApp (whatsapp-web.js + Chromium) | volume `prumo_bot-data` (sessão) |
-| `ollama` / `ollama-pull` | Modelo pequeno do bot; o segundo só baixa o modelo | volume `prumo_ollama-models` |
+| `ollama` / `ollama-pull` | Modelo pequeno do bot, opcional (perfil `ai`); o segundo só baixa o modelo | volume `prumo_ollama-models` |
 | `tasks` | 08:00 lembretes; a cada 15 min, dados novos dos bancos; 03:30 backup do banco | `deploy/backups/` |
 
 ---
@@ -44,6 +44,20 @@ Para a máquina não suspender (servidor 24/7):
 ```bash
 sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 ```
+
+## 1b. Em TrueNAS SCALE (alternativa ao Fedora)
+
+O TrueNAS SCALE 25.x já traz Docker e Compose (Apps › Configuration › pool escolhido). O Prumo roda como um projeto Compose comum, fora do catálogo de Apps, e volta sozinho depois de reiniciar (`restart: unless-stopped`).
+
+```bash
+# uma vez: dataset próprio (aparece em Datasets) e o código
+sudo midclt call pool.dataset.create '{"name": "tank/prumo", "share_type": "GENERIC"}'
+sudo chown "$USER" /mnt/tank/prumo
+cd /mnt/tank/prumo && git clone https://github.com/lucasdeangelo/prumo.git
+cd prumo/deploy && cp .env.example .env && chmod 600 .env
+```
+
+Os comandos `docker` precisam de `sudo` no TrueNAS. Com pouca memória (menos de 8 GB), deixe o modelo local desligado: `COMPOSE_PROFILES=public` e `AI_ENABLED=false`. O `app` e o `bot` têm limite de memória (`APP_MEM_LIMIT`, `BOT_MEM_LIMIT`) para não disputar RAM com o próprio TrueNAS.
 
 ## 2. Baixar o projeto e configurar
 
@@ -94,7 +108,7 @@ docker compose ps
 curl -fsS http://localhost:8080/api/health    # {"ok":true}
 ```
 
-O primeiro build leva alguns minutos. O `ollama-pull` baixa o modelo (cerca de 1,3 GB para `llama3.2:1b`) e termina sozinho. Para rodar sem IA, use `AI_ENABLED=false`: o bot continua funcionando com regras.
+O primeiro build leva alguns minutos. Sem IA (o padrão), o bot funciona com regras. Para ligar o modelo local, use `COMPOSE_PROFILES=public,ai` e `AI_ENABLED=true`: o `ollama-pull` baixa o modelo (cerca de 1,3 GB para `llama3.2:1b`) e termina sozinho. Precisa de uns 2 GB de RAM livres.
 
 Abra `APP_URL` no celular e entre com a sua conta.
 
@@ -167,6 +181,27 @@ Se a atualização trouxer migrações (`supabase/migrations`), aplique antes de
 ## 10. Desenvolvimento x produção
 
 O Supabase Cloud passa a ser o banco de **produção**. Para desenvolver sem mexer nos dados reais, use o Supabase local (`npx supabase start` e a configuração `prumo-local`, porta 3100) e as contas de teste.
+
+## 11. App Android (APK)
+
+O app (`mobile/`) fala com o mesmo endereço público (`APP_URL`) e é instalado pelo link `APP_URL/download/prumo.apk`, servido pelo nginx a partir de `deploy/download/`.
+
+Gerar uma versão nova (no computador de desenvolvimento, com Android Studio):
+
+1. Em `mobile/app.json`, aumente `version` e `android.versionCode` (o Android só instala por cima se o `versionCode` for maior).
+2. Em `mobile/.env`, `EXPO_PUBLIC_API_URL` igual ao `APP_URL`.
+3. Gere e envie:
+
+```bash
+cd mobile
+npx expo prebuild -p android --no-install
+cd android && ./gradlew assembleRelease
+scp app/build/outputs/apk/release/app-release.apk usuario@servidor:/caminho/prumo/deploy/download/prumo.apk
+```
+
+A assinatura usa a chave de `~/.gradle/gradle.properties` (`PRUMO_UPLOAD_*`, ver `mobile/plugins/with-release-signing.js`). **Guarde uma cópia da chave**: sem ela, uma versão nova não instala por cima da anterior e cada pessoa precisa desinstalar (perdendo o login salvo).
+
+No celular: abra o link, permita "instalar apps desconhecidos" para o navegador e instale.
 
 ## Problemas comuns
 
