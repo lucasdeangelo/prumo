@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // The WhatsApp worker is a separate CommonJS package with its own tests.
     "bot/**",
+    // The React Native app has its own toolchain.
+    "mobile/**",
   ]),
 ]);
 

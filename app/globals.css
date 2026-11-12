@@ -1,6 +1,7 @@
 @import "tailwindcss";
 /* The WhatsApp worker (and its Chromium session) is not UI; never scan it for classes. */
 @source not "../bot";
+@source not "../mobile";
 
 /*
  * Prumo design system (canvas "Prumo — Design System", 02 Cores / 04 Fundamentos).

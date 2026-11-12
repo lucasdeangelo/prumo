@@ -43,3 +43,10 @@ next-env.d.ts
 
 # deploy
 /deploy/backups/
+
+# expo run from the repo root by mistake
+/.expo/
+
+# Android app served by nginx (built locally, see docs/DEPLOY.md)
+/deploy/download/*
+!/deploy/download/.gitkeep

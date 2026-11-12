@@ -4,14 +4,15 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { bearerToken, createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type SessionUser = { id: string; email: string | null; name: string | null; inviteCode: string | null };
 
 /** Verified identity for this request, or null. Uses JWT claim verification, never the raw cookie. */
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
-  const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase.auth.getClaims();
+  const [supabase, token] = await Promise.all([createServerSupabaseClient(), bearerToken()]);
+  // Mobile: verify the bearer token itself; web: the cookie session.
+  const { data, error } = await supabase.auth.getClaims(token ?? undefined);
   const claims = data?.claims;
   if (error || !claims?.sub) return null;
   const meta = (claims.user_metadata ?? {}) as Record<string, unknown>;
