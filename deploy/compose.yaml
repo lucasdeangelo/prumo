@@ -8,7 +8,7 @@
 #   nginx       in front of the app: LAN access on LAN_PORT and origin for the tunnel
 #   cloudflared public HTTPS through Cloudflare Tunnel (no router ports opened)
 #   bot         WhatsApp (whatsapp-web.js + Chromium), session in the bot-data volume
-#   ollama      small local model for the bot (optional: AI_ENABLED=false skips it)
+#   ollama      small local model for the bot (profile "ai"; needs ~2 GB of RAM)
 #   tasks       daily notifications cron and database backup (pg_dump to ./backups)
 
 name: prumo
@@ -26,6 +26,7 @@ services:
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?defina no .env}
         NEXT_PUBLIC_WHATSAPP_BOT_NUMBER: ${NEXT_PUBLIC_WHATSAPP_BOT_NUMBER:-}
     image: prumo-app
+    mem_limit: ${APP_MEM_LIMIT:-768m}
     environment:
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
@@ -77,13 +78,14 @@ services:
       # The bot talks to the app inside the compose network; nothing is exposed for it.
       PRUMO_APP_URL: http://app:3000
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
-      AI_ENABLED: ${AI_ENABLED:-true}
+      AI_ENABLED: ${AI_ENABLED:-false}
       OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
       OUTBOX_INTERVAL_MS: ${OUTBOX_INTERVAL_MS:-30000}
     volumes:
       - bot-data:/data
     shm_size: "512m"
+    mem_limit: ${BOT_MEM_LIMIT:-1g}
     depends_on:
       app:
         condition: service_healthy
@@ -91,6 +93,8 @@ services:
   ollama:
     <<: *restart
     image: ollama/ollama:0.5.7
+    # Only with COMPOSE_PROFILES=public,ai (and AI_ENABLED=true). Machines with little RAM skip it.
+    profiles: ["ai"]
     volumes:
       - ollama-models:/root/.ollama
     expose:
@@ -105,6 +109,7 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
     depends_on:
       - ollama
+    profiles: ["ai"]
     restart: "no"
 
   tasks:
