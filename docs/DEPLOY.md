@@ -199,6 +199,8 @@ cd android && ./gradlew assembleRelease
 scp app/build/outputs/apk/release/app-release.apk usuario@servidor:/caminho/prumo/deploy/download/prumo.apk
 ```
 
+No Windows, o build nativo falha com caminhos longos ("ninja: error: mkdir … No such file or directory"). Copie `mobile/` e `lib/domain/` para uma pasta curta (ex.: `C:\p\mobile` e `C:\p\lib\domain`), rode de lá e acrescente `-PPRUMO_CXX_DIR=C:/c`. `-PreactNativeArchitectures=arm64-v8a` gera só para celulares de 64 bits (quase todos hoje) e corta o tempo de build pela metade.
+
 A assinatura usa a chave de `~/.gradle/gradle.properties` (`PRUMO_UPLOAD_*`, ver `mobile/plugins/with-release-signing.js`). **Guarde uma cópia da chave**: sem ela, uma versão nova não instala por cima da anterior e cada pessoa precisa desinstalar (perdendo o login salvo).
 
 No celular: abra o link, permita "instalar apps desconhecidos" para o navegador e instale.

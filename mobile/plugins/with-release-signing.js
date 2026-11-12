@@ -5,14 +5,29 @@
 //   PRUMO_UPLOAD_KEY_ALIAS=prumo
 //   PRUMO_UPLOAD_KEY_PASSWORD=...
 // Without them, release builds keep Expo's default (debug key), so local builds still work.
+//
+// Windows only: native builds fail when object paths pass ~250 characters. Pass
+// -PPRUMO_CXX_DIR=C:/c to keep the app's CMake intermediates in a short folder.
 const { withAppBuildGradle } = require("expo/config-plugins");
 
 const MARKER = "// prumo-release-signing";
+const CXX_MARKER = "// prumo-cxx-dir";
 
 module.exports = function withReleaseSigning(config) {
   return withAppBuildGradle(config, (cfg) => {
     let gradle = cfg.modResults.contents;
-    if (gradle.includes(MARKER)) return cfg;
+    if (!gradle.includes(CXX_MARKER)) {
+      gradle += `
+${CXX_MARKER}
+if (project.hasProperty('PRUMO_CXX_DIR')) {
+    android.externalNativeBuild.cmake.buildStagingDirectory = file(PRUMO_CXX_DIR)
+}
+`;
+    }
+    if (gradle.includes(MARKER)) {
+      cfg.modResults.contents = gradle;
+      return cfg;
+    }
 
     gradle = gradle.replace(
       /signingConfigs\s*\{/,
