@@ -7,7 +7,7 @@
 #   app         Next.js: pages, server actions, /api (webhook, bot API, cron endpoint)
 #   nginx       in front of the app: LAN access on LAN_PORT and origin for the tunnel
 #   cloudflared public HTTPS through Cloudflare Tunnel (no router ports opened)
-#   bot         WhatsApp (whatsapp-web.js + Chromium), session in the bot-data volume
+#   bot         WhatsApp (whatsapp-web.js + Chromium), session in the bot-data volume (profile "bot")
 #   ollama      small local model for the bot (profile "ai"; needs ~2 GB of RAM)
 #   tasks       daily notifications cron and database backup (pg_dump to ./backups)
 
@@ -74,6 +74,8 @@ services:
     build:
       context: ../bot
     image: prumo-bot
+    # Only with "bot" in COMPOSE_PROFILES (e.g. public,bot).
+    profiles: ["bot"]
     environment:
       # The bot talks to the app inside the compose network; nothing is exposed for it.
       PRUMO_APP_URL: http://app:3000

@@ -17,7 +17,7 @@ Nenhuma porta do roteador precisa ser aberta. Só o nginx publica uma porta (808
 | `app` | Telas, ações do servidor, `/api` (webhook do Pluggy, API do bot, cron) | — |
 | `nginx` | Entrada única: rede local e origem do túnel; cabeçalhos de segurança | — |
 | `cloudflared` | Endereço público HTTPS (perfil `public`) | — |
-| `bot` | WhatsApp (whatsapp-web.js + Chromium) | volume `prumo_bot-data` (sessão) |
+| `bot` | WhatsApp (whatsapp-web.js + Chromium), perfil `bot` | volume `prumo_bot-data` (sessão) |
 | `ollama` / `ollama-pull` | Modelo pequeno do bot, opcional (perfil `ai`); o segundo só baixa o modelo | volume `prumo_ollama-models` |
 | `tasks` | 08:00 lembretes; a cada 15 min, dados novos dos bancos; 03:30 backup do banco | `deploy/backups/` |
 
