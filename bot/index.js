@@ -117,11 +117,24 @@ async function showTyping(chatId) {
   }
 }
 
+/**
+ * When WhatsApp Web reloads itself (e.g. right after linking), whatsapp-web.js injects its listeners
+ * again and every message arrives twice. Handle each message id once.
+ */
+const handled = new Set();
+function firstTime(id) {
+  if (handled.has(id)) return false;
+  handled.add(id);
+  if (handled.size > 1000) handled.delete(handled.values().next().value);
+  return true;
+}
+
 // ==================== MENSAGENS ====================
 client.on("message", async (msg) => {
   if (msg.fromMe) return;
   const chatId = msg.from || "";
   if (chatId.endsWith("@g.us") || chatId.endsWith("@newsletter") || chatId === "status@broadcast") return;
+  if (!firstTime(messageIdOf(msg, chatId))) return;
   const text = (msg.body || "").trim();
   if (!text) {
     if (msg.hasMedia) await safeSend(chatId, "📎 Por enquanto entendo só texto. Ex.: *gastei 45,90 no mercado*");
