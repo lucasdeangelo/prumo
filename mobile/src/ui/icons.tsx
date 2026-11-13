@@ -1,6 +1,6 @@
 // Icons from the design system ("04 Fundamentos · Ícones · traço 1.6 · 24px"), same paths as the web.
 import { memo } from "react";
-import Svg, { Circle, Line, Path, Rect } from "react-native-svg";
+import Svg, { Circle, Path, Rect } from "react-native-svg";
 
 import { colors } from "./theme";
 
@@ -42,14 +42,15 @@ export const TotalsIcon = make(<Path d="M5 12h14M5 7h14M5 17h8" />);
 export const GiftIcon = make(<><Rect x="4" y="9" width="16" height="11" rx="1.5" /><Path d="M12 9v11M4 13h16M12 9c-2-4-6-3-5 0M12 9c2-4 6-3 5 0" /></>);
 export const EyeIcon = make(<><Path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><Circle cx="12" cy="12" r="3" /></>);
 
-/** The Prumo symbol: the plumb line (direction) and the weight (two halves, one center). */
-export function PrumoSymbol({ height = 32, color = colors.primary, strokeWidth = 1.6 }: { height?: number; color?: string; strokeWidth?: number }) {
+/** The Prumo symbol ("F · Rumo corrigido"): a path that wavers and ends straight, pointing up. */
+export const PRUMO_PATH = "M20 60c0-12 24-12 24-24 0-8-12-6-12-16V8";
+export const PRUMO_HEAD = "M24 15l8-8 8 8";
+
+export function PrumoSymbol({ height = 32, color = colors.primary, strokeWidth = 4.5 }: { height?: number; color?: string; strokeWidth?: number }) {
   return (
-    <Svg width={(height * 24) / 32} height={height} viewBox="0 0 24 32" fill="none">
-      <Line x1="8" y1="2" x2="16" y2="2" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
-      <Line x1="12" y1="2" x2="12" y2="18" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
-      <Path d="M12 18 A6 6 0 0 0 12 30 Z" fill={color} />
-      <Circle cx="12" cy="24" r="6" stroke={color} strokeWidth={strokeWidth} />
+    <Svg width={height} height={height} viewBox="0 0 64 64" fill="none">
+      <Path d={PRUMO_PATH} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d={PRUMO_HEAD} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }

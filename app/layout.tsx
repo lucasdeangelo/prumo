@@ -3,8 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 
 import "./globals.css";
 
-// Design system: Geist for interface and text (400/500/600), Geist Mono for labels and dates.
-const geist = Geist({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-geist" });
+// Design system: Geist for interface and text (400/500/600; 700 only in the wordmark), Geist Mono for labels and dates.
+const geist = Geist({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-geist" });
 const geistMono = Geist_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-geist-mono" });
 
 export const metadata: Metadata = {

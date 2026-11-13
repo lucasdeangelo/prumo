@@ -37,6 +37,8 @@ export const fonts = {
   regular: "Geist-Regular",
   medium: "Geist-Medium",
   semibold: "Geist-SemiBold",
+  /** Wordmark only ("prumo"). */
+  bold: "Geist-Bold",
   mono: "GeistMono-Regular",
   monoMedium: "GeistMono-Medium",
 } as const;

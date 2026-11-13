@@ -41,7 +41,7 @@ export default function Home() {
           <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
             <div className="mb-6 flex items-center gap-4">
               <span className="flex size-14 items-center justify-center rounded-[10px] bg-primary">
-                <PrumoSymbol className="h-9 w-7" color="#ffffff" />
+                <PrumoSymbol className="size-[34px]" color="#ffffff" strokeWidth={6} />
               </span>
               <span className="label-mono">Princípios</span>
             </div>
@@ -70,7 +70,7 @@ export default function Home() {
           </div>
         </section>
         <footer className="flex items-center gap-2 border-t border-border py-6 text-sm text-muted-foreground">
-          <PrumoSymbol className="h-4 w-3" color="var(--muted-foreground)" /> Prumo · finanças a dois, no prumo.
+          <PrumoSymbol className="size-4" color="var(--muted-foreground)" strokeWidth={7} /> Prumo · finanças a dois, no prumo.
         </footer>
       </div>
     </main>

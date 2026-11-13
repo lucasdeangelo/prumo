@@ -24,25 +24,23 @@ export const SparkIcon = (p: IconProps) => <Svg {...p}><path d="M12 4l1.6 4.4L18
 export const ChevronRightIcon = (p: IconProps) => <Svg {...p}><path d="M9 5l7 7-7 7" /></Svg>;
 export const SignOutIcon = (p: IconProps) => <Svg {...p}><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10" /></Svg>;
 
-/** The Prumo symbol: the plumb line (direction) and the weight (two halves, one center). */
-export function PrumoSymbol({ className, color = "currentColor", strokeWidth = 1.6 }: { className?: string; color?: string; strokeWidth?: number }) {
+/** The Prumo symbol ("F · Rumo corrigido"): a path that wavers and ends straight, pointing up. */
+export function PrumoSymbol({ className, color = "currentColor", strokeWidth = 4.5 }: { className?: string; color?: string; strokeWidth?: number }) {
   return (
-    <svg viewBox="0 0 24 32" fill="none" aria-hidden="true" className={className}>
-      <line x1="8" y1="2" x2="16" y2="2" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
-      <line x1="12" y1="2" x2="12" y2="18" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
-      <path d="M12 18 A6 6 0 0 0 12 30 Z" fill={color} />
-      <circle cx="12" cy="24" r="6" stroke={color} strokeWidth={strokeWidth} />
+    <svg viewBox="0 0 64 64" fill="none" aria-hidden="true" className={className}>
+      <path d="M20 60c0-12 24-12 24-24 0-8-12-6-12-16V8" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M24 15l8-8 8 8" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-/** Symbol + lowercase wordmark, as on the sign-in screen. */
+/** Symbol + lowercase wordmark, as on the sign-in screen ("Entrar": 32 px symbol, 30 px bold). */
 export function PrumoLogo({ size = "md" }: { size?: "md" | "lg" }) {
   const lg = size === "lg";
   return (
     <span className="inline-flex items-center gap-2.5 text-foreground" aria-label="Prumo">
-      <PrumoSymbol className={lg ? "h-7 w-[21px]" : "h-6 w-[18px]"} color="var(--primary)" strokeWidth={2} />
-      <span className={lg ? "text-[28px] font-semibold tracking-[-0.045em]" : "text-[22px] font-semibold tracking-[-0.045em]"}>prumo</span>
+      <PrumoSymbol className={lg ? "size-8" : "size-6"} color="var(--primary)" strokeWidth={5.5} />
+      <span className={lg ? "text-[30px] font-bold tracking-[-0.05em]" : "text-[22px] font-bold tracking-[-0.05em]"}>prumo</span>
     </span>
   );
 }

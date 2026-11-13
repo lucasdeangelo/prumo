@@ -24,7 +24,7 @@ import { colors, fonts, radius, segmentShadow } from "./theme";
 
 // ---------- Text ----------
 
-type Weight = "regular" | "medium" | "semibold";
+type Weight = "regular" | "medium" | "semibold" | "bold";
 export type TxtProps = TextProps & {
   size?: number;
   weight?: Weight;
@@ -36,7 +36,7 @@ export type TxtProps = TextProps & {
   tracking?: number;
 };
 
-const family = (weight: Weight, mono?: boolean) => (mono ? (weight === "regular" ? fonts.mono : fonts.monoMedium) : weight === "medium" ? fonts.medium : weight === "semibold" ? fonts.semibold : fonts.regular);
+const family = (weight: Weight, mono?: boolean) => (mono ? (weight === "regular" ? fonts.mono : fonts.monoMedium) : weight === "medium" ? fonts.medium : weight === "semibold" ? fonts.semibold : weight === "bold" ? fonts.bold : fonts.regular);
 
 /** All copy goes through here: Geist at the design sizes, tabular numbers where asked. */
 export function Txt({ size = 15, weight = "regular", color = colors.foreground, mono, tabular, center, lh, tracking, style, ...rest }: TxtProps) {

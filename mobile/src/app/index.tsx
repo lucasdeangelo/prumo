@@ -43,7 +43,7 @@ export default function Welcome() {
       <Card style={{ padding: 24 }}>
         <Row gap={16} style={{ marginBottom: 24 }}>
           <View style={{ width: 56, height: 56, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
-            <PrumoSymbol height={36} color="#ffffff" />
+            <PrumoSymbol height={34} color="#ffffff" strokeWidth={6} />
           </View>
           <Label>Princípios</Label>
         </Row>
@@ -69,7 +69,7 @@ export default function Welcome() {
         ))}
       </View>
       <Row gap={8} style={{ borderTopWidth: 1, borderColor: colors.border, marginTop: 40, paddingVertical: 24 }}>
-        <PrumoSymbol height={16} color={colors.mutedForeground} />
+        <PrumoSymbol height={16} color={colors.mutedForeground} strokeWidth={7} />
         <Txt size={14} color={colors.mutedForeground}>Prumo · finanças a dois, no prumo.</Txt>
       </Row>
     </ScrollView>
