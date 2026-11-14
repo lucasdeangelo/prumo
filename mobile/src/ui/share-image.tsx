@@ -3,6 +3,8 @@ import { useRef, useState } from "react";
 import { View } from "react-native";
 import { captureRef } from "react-native-view-shot";
 
+import { ShowValues } from "@/lib/hide-values";
+
 import { Button, Txt } from "./kit";
 import { colors } from "./theme";
 
@@ -28,7 +30,9 @@ export function ShareImageButton({ title, lines, label = "Compartilhar resumo co
 
   return (
     <>
+      {/* Shared on purpose, so it keeps the amounts even with "Esconder valores" on. */}
       <View pointerEvents="none" style={{ position: "absolute", left: -2000, top: 0 }}>
+        <ShowValues>
         <View ref={card} collapsable={false} style={{ width: 360, height: 450, backgroundColor: "#F5F6F3" }}>
           <View style={{ height: 4, backgroundColor: "#1D4D3F" }} />
           <View style={{ paddingHorizontal: 32, flex: 1 }}>
@@ -40,6 +44,7 @@ export function ShareImageButton({ title, lines, label = "Compartilhar resumo co
             <Txt size={11} color={colors.mutedForeground} style={{ position: "absolute", left: 32, bottom: 26 }}>Finanças a dois, no prumo.</Txt>
           </View>
         </View>
+        </ShowValues>
       </View>
       <Button variant="outline" pending={busy} pendingText="Preparando…" onPress={share}>{label}</Button>
     </>

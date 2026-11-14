@@ -5,7 +5,7 @@ import { View } from "react-native";
 
 import { PlusIcon, RepeatIcon } from "@/ui/icons";
 import { Amount, StatTile } from "@/ui/finance";
-import { Chip, EmptyState, Flex, IconButton, ListGroup, PageHeader, Press, Row, StateBadge, Txt, go } from "@/ui/kit";
+import { Chip, EmptyState, Flex, HideValuesButton, IconButton, ListGroup, PageHeader, Press, Row, StateBadge, Txt, go } from "@/ui/kit";
 import { Screen } from "@/ui/screen";
 import { colors } from "@/ui/theme";
 
@@ -21,7 +21,7 @@ export default function Upcoming() {
     <Screen<Data> path={`upcoming?dias=${range}`} gap={16}>
       {(d) => (
         <>
-          <PageHeader title="Contas futuras" subtitle={`Próximos ${d.range} dias`} back="/monthly" action={<IconButton href="/upcoming/new" label="Nova conta" tone="tint"><PlusIcon size={20} color={colors.primary} strokeWidth={1.8} /></IconButton>} />
+          <PageHeader title="Contas futuras" subtitle={`Próximos ${d.range} dias`} back="/monthly" action={<Row gap={4}><HideValuesButton /><IconButton href="/upcoming/new" label="Nova conta" tone="tint"><PlusIcon size={20} color={colors.primary} strokeWidth={1.8} /></IconButton></Row>} />
           <Row gap={8}>{RANGES.map((r) => <Chip key={r} label={`${r} dias`} active={r === d.range} onPress={() => router.setParams({ dias: String(r) })} />)}</Row>
           <Row>
             <StatTile label="A pagar" cents={d.outCents} tone="out" />

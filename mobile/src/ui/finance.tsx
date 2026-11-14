@@ -4,10 +4,11 @@ import { memo, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import Svg, { G, Line as SvgLine, Path, Rect, Text as SvgText } from "react-native-svg";
 
+import { useHideValues } from "@/lib/hide-values";
 import { useSession } from "@/lib/session";
 
 import { BankIcon, CalendarIcon, ChatIcon, EyeIcon, GiftIcon, LockIcon, SparkIcon, TotalsIcon, WalletIcon } from "./icons";
-import { Card, Flex, Label, ListGroup, Press, Row, Txt } from "./kit";
+import { Card, Flex, HideValuesButton, Label, ListGroup, Press, Row, Txt } from "./kit";
 import { colors, fonts, PERSON_BG, radius, segmentShadow, spaceColor, type Person, type PersonColor } from "./theme";
 
 // ---------- Money ----------
@@ -80,7 +81,7 @@ export function CoupleAvatars({ people, size = 36 }: { people: Pick<Person, "ini
 }
 
 /** 01 · Seletor de espaço: Meu | Nosso with the "who sees" caption. Switching is instant. */
-export function SpaceSwitcher({ me, partner }: { me: Person; partner: Person | null }) {
+export function SpaceSwitcher({ me, partner, hideValues }: { me: Person; partner: Person | null; hideValues?: boolean }) {
   const { space, setSpace } = useSession();
   const pair = partner ? (me.color === "blue" ? [me, partner] : [partner, me]) : [me];
   const caption = space === "nosso" ? `${pair.map((p) => p.name).join(" e ")} veem este espaço` : `Seu espaço. ${partner?.name ?? "Seu par"} só vê o que você compartilha.`;
@@ -98,6 +99,7 @@ export function SpaceSwitcher({ me, partner }: { me: Person; partner: Person | n
           })}
         </View>
         {space === "nosso" && partner ? <CoupleAvatars people={pair} size={32} /> : <Avatar person={me} size={32} />}
+        {hideValues ? <View style={{ marginLeft: -8, marginRight: -12 }}><HideValuesButton /></View> : null}
       </Row>
       <Txt size={13} color={colors.mutedForeground} style={{ paddingHorizontal: 4 }}>{caption}</Txt>
     </View>
@@ -276,6 +278,7 @@ export type MonthBar = { month: string; label: string; incomeCents: number; expe
 
 /** Income vs spending per month: two series, legend above, tap a month for its numbers. */
 export function IncomeExpenseBars({ data }: { data: MonthBar[] }) {
+  const hidden = useHideValues();
   const [width, onLayout] = useWidth();
   const [active, setActive] = useState<number | null>(null);
   const height = 192;
@@ -294,7 +297,7 @@ export function IncomeExpenseBars({ data }: { data: MonthBar[] }) {
       </Row>
       <Pressable
         onLayout={onLayout}
-        accessibilityLabel={data.map((d) => `${d.label}: entradas ${formatBRL(d.incomeCents)}, saídas ${formatBRL(d.expenseCents)}`).join(". ")}
+        accessibilityLabel={hidden ? "Entradas e saídas por mês, valores ocultos" : data.map((d) => `${d.label}: entradas ${formatBRL(d.incomeCents)}, saídas ${formatBRL(d.expenseCents)}`).join(". ")}
         onPress={(e) => {
           const i = Math.floor((e.nativeEvent.locationX - AXIS) / band);
           setActive(i >= 0 && i < data.length && i !== active ? i : null);
@@ -306,7 +309,7 @@ export function IncomeExpenseBars({ data }: { data: MonthBar[] }) {
             {ticks.map((t) => (
               <SvgLine key={t} x1={AXIS} x2={width} y1={y(t)} y2={y(t)} stroke={colors.chartGrid} strokeWidth={1} />
             ))}
-            {ticks.map((t) => (
+            {hidden ? null : ticks.map((t) => (
               <SvgText key={`l${t}`} x={AXIS - 6} y={y(t) + 4} textAnchor="end" {...axisText}>{formatAxisBRL(t)}</SvgText>
             ))}
             {data.map((d, i) => {
@@ -349,6 +352,7 @@ export type CumulativePoint = { day: number; expenseCents: number | null; previo
 
 /** Spending accumulated through the month, against the previous month as a dashed reference. */
 export function CumulativeLine({ data }: { data: CumulativePoint[] }) {
+  const hidden = useHideValues();
   const [width, onLayout] = useWidth();
   const [active, setActive] = useState<number | null>(null);
   const height = 176;
@@ -379,7 +383,7 @@ export function CumulativeLine({ data }: { data: CumulativePoint[] }) {
         {width > 0 && data.length > 0 ? (
           <Svg width={width} height={height}>
             {ticks.map((t) => <SvgLine key={t} x1={AXIS} x2={width} y1={y(t)} y2={y(t)} stroke={colors.chartGrid} strokeWidth={1} />)}
-            {ticks.map((t) => <SvgText key={`l${t}`} x={AXIS - 6} y={y(t) + 4} textAnchor="end" {...axisText}>{formatAxisBRL(t)}</SvgText>)}
+            {hidden ? null : ticks.map((t) => <SvgText key={`l${t}`} x={AXIS - 6} y={y(t) + 4} textAnchor="end" {...axisText}>{formatAxisBRL(t)}</SvgText>)}
             {data.map((p, i) => (i % labelEvery === 0 || i === data.length - 1 ? <SvgText key={`d${p.day}`} x={x(i)} y={height - 4} textAnchor="middle" {...axisText}>{p.day}</SvgText> : null))}
             {active !== null ? <SvgLine x1={x(active)} x2={x(active)} y1={6} y2={plotH} stroke={colors.chartAxis} strokeDasharray="3 3" /> : null}
             <Path d={line("previousCents")} stroke={colors.chartAxis} strokeWidth={2} strokeDasharray="4 4" fill="none" />

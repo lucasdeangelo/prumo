@@ -8,7 +8,7 @@ import { Pressable, View } from "react-native";
 import { useAction } from "@/lib/query";
 import { ChevronRightIcon, PlusIcon, SparkIcon } from "@/ui/icons";
 import { Amount, StatTile, UpdatedAt } from "@/ui/finance";
-import { Button, EmptyState, Flex, FormMessage, IconButton, ListGroup, PageHeader, Row, Segmented, StateBadge, Txt } from "@/ui/kit";
+import { Button, EmptyState, Flex, FormMessage, HideValuesButton, IconButton, ListGroup, PageHeader, Row, Segmented, StateBadge, Txt } from "@/ui/kit";
 import { Screen } from "@/ui/screen";
 import { colors, radius } from "@/ui/theme";
 
@@ -32,7 +32,7 @@ function SubscriptionsView({ d }: { d: Data }) {
 
   return (
     <>
-      <PageHeader title="Assinaturas" action={<IconButton href="/subscriptions/new" label="Nova assinatura" tone="tint"><PlusIcon size={20} color={colors.primary} strokeWidth={1.8} /></IconButton>} />
+      <PageHeader title="Assinaturas" action={<Row gap={4}><HideValuesButton /><IconButton href="/subscriptions/new" label="Nova assinatura" tone="tint"><PlusIcon size={20} color={colors.primary} strokeWidth={1.8} /></IconButton></Row>} />
       {d.hasPartner ? (
         <View style={{ gap: 8 }}>
           <Segmented label="De quem" value={d.ours ? "nossas" : "minhas"} onChange={(v) => router.setParams({ aba: v })} options={[{ value: "minhas", label: "Minhas" }, { value: "nossas", label: "Nossas" }]} />

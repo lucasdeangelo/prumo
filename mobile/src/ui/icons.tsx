@@ -41,6 +41,7 @@ export const LockIcon = make(<><Rect x="5" y="11" width="14" height="9" rx="2" /
 export const TotalsIcon = make(<Path d="M5 12h14M5 7h14M5 17h8" />);
 export const GiftIcon = make(<><Rect x="4" y="9" width="16" height="11" rx="1.5" /><Path d="M12 9v11M4 13h16M12 9c-2-4-6-3-5 0M12 9c2-4 6-3 5 0" /></>);
 export const EyeIcon = make(<><Path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><Circle cx="12" cy="12" r="3" /></>);
+export const EyeOffIcon = make(<><Path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><Circle cx="12" cy="12" r="3" /><Path d="M4 4l16 16" /></>);
 
 /** The Prumo symbol ("F · Rumo corrigido"): a path that wavers and ends straight, pointing up. */
 export const PRUMO_PATH = "M20 60c0-12 24-12 24-24 0-8-12-6-12-16V8";

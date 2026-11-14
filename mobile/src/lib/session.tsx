@@ -3,6 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import type { Space } from "./api";
+import { loadHideValues } from "./hide-values";
 import { queryClient } from "./query";
 import { supabase } from "./supabase";
 
@@ -24,7 +25,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([supabase.auth.getSession(), SecureStore.getItemAsync(SPACE_KEY).catch(() => null)]).then(([{ data }, saved]) => {
+    Promise.all([supabase.auth.getSession(), SecureStore.getItemAsync(SPACE_KEY).catch(() => null), loadHideValues()]).then(([{ data }, saved]) => {
       if (!alive) return;
       setSession(data.session);
       if (saved === "nosso") setSpaceState("nosso");

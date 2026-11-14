@@ -56,7 +56,7 @@ export default function Overview() {
     <Screen<Data> path="overview">
       {(d) => (
         <>
-          <SpaceSwitcher me={d.me} partner={d.partner} />
+          <SpaceSwitcher me={d.me} partner={d.partner} hideValues />
           {d.mode === "invite" ? <InviteCard /> : d.mode === "nosso" ? <NossoHome d={d} n={d.nosso!} /> : <MeuHome d={d} m={d.meu!} />}
         </>
       )}

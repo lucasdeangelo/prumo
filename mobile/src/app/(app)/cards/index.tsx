@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Pressable, View } from "react-native";
 
 import { Amount, Avatar, InstitutionMark, SegmentBar, UpdatedAt } from "@/ui/finance";
-import { Button, Card, EmptyState, Flex, ListGroup, PageHeader, Pill, Press, Row, SectionHeader, TextLink, Txt, go } from "@/ui/kit";
+import { Button, Card, EmptyState, Flex, HideValuesButton, ListGroup, PageHeader, Pill, Press, Row, SectionHeader, TextLink, Txt, go } from "@/ui/kit";
 import { Screen } from "@/ui/screen";
 import { colors, radius, segmentShadow, type Person } from "@/ui/theme";
 
@@ -77,7 +77,7 @@ function CardsView({ d }: { d: Data }) {
 
   return (
     <>
-      <PageHeader title="Cartões" subtitle={d.hasPartner ? "Nosso · cartões compartilhados" : undefined} />
+      <PageHeader title="Cartões" subtitle={d.hasPartner ? "Nosso · cartões compartilhados" : undefined} action={<HideValuesButton />} />
       <UpdatedAt at={d.syncedAt} />
 
       <Row>

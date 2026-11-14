@@ -14,7 +14,7 @@ import { prefetchScreen, useScreen } from "@/lib/query";
 import { useSession } from "@/lib/session";
 import { DownloadIcon, XIcon } from "@/ui/icons";
 import { Amount, CategoryBars, CumulativeLine, SpaceSwitcher, TransactionRow, UpdatedAt, type CategoryRow, type CumulativePoint, type ListTx, type TagView } from "@/ui/finance";
-import { Card, CardTitle, Chip, EmptyState, Flex, IconButton, Label, ListGroup, MonthSwitcher, PageHeader, Press, Row, SectionHeader, TextLink, Txt } from "@/ui/kit";
+import { Card, CardTitle, Chip, EmptyState, Flex, HideValuesButton, IconButton, Label, ListGroup, MonthSwitcher, PageHeader, Press, Row, SectionHeader, TextLink, Txt } from "@/ui/kit";
 import { BOTTOM_SPACE, Page, Skeleton } from "@/ui/screen";
 import { colors, radius, type Person } from "@/ui/theme";
 
@@ -94,7 +94,7 @@ export default function Month() {
 
   const header = (
     <View style={{ gap: 20, paddingBottom: 12 }}>
-      <PageHeader title="Mês" action={<IconButton label="Exportar CSV" onPress={() => exportCsv(d.month)}><DownloadIcon size={20} /></IconButton>} />
+      <PageHeader title="Mês" action={<Row gap={0}><HideValuesButton /><IconButton label="Exportar CSV" onPress={() => exportCsv(d.month)}><DownloadIcon size={20} /></IconButton></Row>} />
       {d.household ? <SpaceSwitcher me={d.household.me} partner={d.household.partner} /> : null}
       <MonthSwitcher label={formatMonthLong(d.month)} onPrev={() => goMonth(d.prev)} onNext={d.month < d.current ? () => goMonth(d.next) : undefined} />
       {d.month === d.current ? <UpdatedAt at={d.syncedAt} /> : null}

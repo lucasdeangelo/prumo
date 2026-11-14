@@ -1,6 +1,6 @@
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { router } from "expo-router";
-import { memo, useState } from "react";
+import { Children, memo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -19,7 +19,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { maskMoney, useHideValues, useHideValuesSetting } from "@/lib/hide-values";
+
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon } from "./icons";
 import { colors, fonts, radius, segmentShadow } from "./theme";
 
 // ---------- Text ----------
@@ -38,8 +40,12 @@ export type TxtProps = TextProps & {
 
 const family = (weight: Weight, mono?: boolean) => (mono ? (weight === "regular" ? fonts.mono : fonts.monoMedium) : weight === "medium" ? fonts.medium : weight === "semibold" ? fonts.semibold : weight === "bold" ? fonts.bold : fonts.regular);
 
-/** All copy goes through here: Geist at the design sizes, tabular numbers where asked. */
-export function Txt({ size = 15, weight = "regular", color = colors.foreground, mono, tabular, center, lh, tracking, style, ...rest }: TxtProps) {
+/**
+ * All copy goes through here: Geist at the design sizes, tabular numbers where asked.
+ * With "Esconder valores" on, every "R$ 1.234,56" in the text shows as "R$ ••••".
+ */
+export function Txt({ size = 15, weight = "regular", color = colors.foreground, mono, tabular, center, lh, tracking, style, children, ...rest }: TxtProps) {
+  const hidden = useHideValues();
   return (
     <Text
       allowFontScaling
@@ -51,7 +57,9 @@ export function Txt({ size = 15, weight = "regular", color = colors.foreground, 
         style,
       ]}
       {...rest}
-    />
+    >
+      {hidden ? Children.map(children, (c) => (typeof c === "string" ? maskMoney(c) : c)) : children}
+    </Text>
   );
 }
 
@@ -200,6 +208,23 @@ export function IconButton({ href, onPress, label, tone = "plain", children }: {
 }
 
 // ---------- Headers ----------
+
+/** The eye in the headers: hides every amount on this phone until tapped again. */
+export function HideValuesButton() {
+  const [hidden, setHidden] = useHideValuesSetting();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={hidden ? "Mostrar valores" : "Esconder valores"}
+      accessibilityState={{ selected: hidden }}
+      onPress={() => setHidden(!hidden)}
+      hitSlop={4}
+      style={({ pressed }) => [styles.iconButton, pressed && { backgroundColor: colors.muted }]}
+    >
+      {hidden ? <EyeOffIcon size={20} strokeWidth={1.8} /> : <EyeIcon size={20} strokeWidth={1.8} />}
+    </Pressable>
+  );
+}
 
 /** Screen title (Título · 24/32 · 500), optional back arrow and a trailing action. */
 export function PageHeader({ title, subtitle, back, action, children }: { title?: string; subtitle?: string; back?: string | true; action?: React.ReactNode; children?: React.ReactNode }) {
