@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { ChatIcon, HomeIcon, PrumoLogo, PrumoSymbol, RepeatIcon } from "@/components/app/icons";
+import { ChatIcon, DownloadIcon, HomeIcon, PrumoLogo, PrumoSymbol, RepeatIcon } from "@/components/app/icons";
 import { Button } from "@/components/ui/button";
 
 // Copy from the "01 Marca" board: the plumb line, and three principles.
@@ -35,6 +35,16 @@ export default function Home() {
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild className="w-full sm:w-auto"><Link href="/signup" className="no-underline hover:text-primary-foreground">Criar conta grátis</Link></Button>
               <Button asChild variant="outline" className="w-full sm:w-auto"><Link href="/login" className="no-underline hover:text-foreground">Já tenho conta</Link></Button>
+            </div>
+            {/* Served by nginx from deploy/download/ (relative, so it works on every address of the server). */}
+            <div className="flex flex-col gap-2">
+              <Button asChild variant="secondary" className="w-full gap-2 sm:w-auto sm:self-start">
+                <a href="/download/prumo.apk" download className="no-underline hover:text-secondary-foreground">
+                  <DownloadIcon className="size-5" strokeWidth={1.8} />
+                  Baixar o app para Android
+                </a>
+              </Button>
+              <p className="text-[13px] text-muted-foreground">Arquivo APK. No celular, permita instalar apps do navegador quando pedir.</p>
             </div>
           </div>
 
