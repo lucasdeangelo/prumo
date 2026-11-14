@@ -5,11 +5,12 @@ import { PageHeader } from "@/components/app/bits";
 import { Avatar, SpaceChip } from "@/components/app/couple";
 import { FreeMoneyForm } from "@/components/app/plan-forms";
 import { Card } from "@/components/ui/card";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { freeMoneyAllowance, getHousehold, listProposals } from "@/lib/application/household";
 import { loadFacts } from "@/lib/application/couple-data";
 import { addMonths, monthBounds, todayIn } from "@/lib/domain/dates";
-import { centsToInput, formatBRL } from "@/lib/domain/money";
+import { centsToInput } from "@/lib/domain/money";
 
 export const metadata = { title: "Dinheiro livre · Prumo" };
 
@@ -46,10 +47,10 @@ export default async function FreeMoneyPage() {
           </span>
           {status ? <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{status}</span> : null}
         </div>
-        {proposedValue !== undefined ? <p className="tabular text-2xl font-medium">{formatBRL(proposedValue)} <span className="text-sm text-muted-foreground">por mês</span></p> : null}
+        {proposedValue !== undefined ? <p className="tabular text-2xl font-medium"><Money cents={proposedValue} /> <span className="text-sm text-muted-foreground">por mês</span></p> : null}
         <p className="text-[13px] text-muted-foreground">
-          Hoje: {current !== null ? formatBRL(current) : "sem valor combinado"}
-          {isMe && avgMine > 0 ? ` · média usada nos últimos 3 meses: ${formatBRL(avgMine)}` : ""}
+          Hoje: {current !== null ? <Money cents={current} /> : "sem valor combinado"}
+          {isMe && avgMine > 0 ? <> · média usada nos últimos 3 meses: <Money cents={avgMine} /></> : ""}
         </p>
       </Card>
     );
@@ -86,7 +87,7 @@ export default async function FreeMoneyPage() {
         </Card>
       )}
       <p className="text-center text-[13px] text-muted-foreground">
-        O novo valor vale a partir de {nextMonth}, quando os dois confirmarem.{mine !== null ? ` Até lá, segue ${formatBRL(mine)}.` : ""} Para usar, marque o gasto como “Dinheiro livre” na movimentação.
+        O novo valor vale a partir de {nextMonth}, quando os dois confirmarem.{mine !== null ? <> Até lá, segue <Money cents={mine} />.</> : ""} Para usar, marque o gasto como “Dinheiro livre” na movimentação.
       </p>
     </div>
   );

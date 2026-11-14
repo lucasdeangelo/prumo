@@ -6,11 +6,11 @@ import { Avatar, InstitutionMark, VisibilityBadge } from "@/components/app/coupl
 import { AuthorizeButton, InitialSync, OpenMeuPluggy } from "@/components/app/connect-client";
 import { VisibilitySegment } from "@/components/app/visibility-segment";
 import { Card } from "@/components/ui/card";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { loadAccounts } from "@/lib/application/couple-data";
 import { getHousehold } from "@/lib/application/household";
 import { addDays, formatDayShort, todayIn } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cn } from "@/lib/utils";
 
@@ -220,7 +220,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
                   <span className="block text-[13px] text-muted-foreground">
                     {a.card_last4 ? `•• ${a.card_last4}` : ""}
                     {a.card_last4 && a.balance_cents !== null ? " · " : ""}
-                    {a.balance_cents !== null ? formatBRL(Math.abs(a.balance_cents)) : ""}
+                    {a.balance_cents !== null ? <Money cents={Math.abs(a.balance_cents)} /> : ""}
                     {!a.import_enabled ? " · não importar" : ""}
                   </span>
                 </span>
@@ -294,7 +294,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
               <span className="block truncate text-[15px] font-medium">{a.institution ? `${a.institution} · ` : ""}{a.type === "CREDIT" ? `Cartão${a.card_last4 ? ` •• ${a.card_last4}` : ""}` : a.name}</span>
               {household?.partner ? <span className="mt-1 block"><VisibilityBadge kind={a.visibility} /></span> : null}
             </span>
-            {a.balance_cents !== null ? <span className="tabular text-[15px] font-medium">{formatBRL(Math.abs(a.balance_cents))}</span> : null}
+            {a.balance_cents !== null ? <span className="tabular text-[15px] font-medium"><Money cents={Math.abs(a.balance_cents)} /></span> : null}
           </li>
         ))}
       </ul>

@@ -5,12 +5,12 @@ import { cycleOwnerAction } from "@/app/(app)/cards/actions";
 import { Amount, PageHeader, SectionHeader } from "@/components/app/bits";
 import { Avatar, PERSON_BG, PERSON_TINT, SegmentBar, SpaceChip, UpdatedAt } from "@/components/app/couple";
 import { Card } from "@/components/ui/card";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { householdCards, loadInvoice, type InvoiceLine, type InvoiceOwner } from "@/lib/application/cards";
 import { lastSyncAt } from "@/lib/application/couple-data";
 import { sharePercentLabel } from "@/lib/domain/couple";
 import { daysBetween, formatDayLabel, formatDayShort, todayIn } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 import { transactionLabel } from "@/lib/types";
 
 export const metadata = { title: "Fatura compartilhada · Prumo" };
@@ -63,12 +63,12 @@ export default async function SplitInvoicePage({ params, searchParams }: { param
             {!invoice.period.closed ? `Aberta · fecha ${invoice.period.closeEstimated ? "por volta de " : ""}${formatDayShort(invoice.period.end)}` : "Fechada"}
           </span>
         </div>
-        <span className="tabular text-[32px] font-medium tracking-[-0.03em]">{formatBRL(Math.max(0, invoice.settlement.totalCents))}</span>
+        <span className="tabular text-[32px] font-medium tracking-[-0.03em]"><Money cents={Math.max(0, invoice.settlement.totalCents)} /></span>
         {invoice.pendingLines.length > 0 ? (
           <p className="text-[13px] text-muted-foreground">{invoice.pendingLines.length} {invoice.pendingLines.length === 1 ? "lançamento ainda está" : "lançamentos ainda estão"} em processamento no banco e {invoice.pendingLines.length === 1 ? "entra" : "entram"} aqui quando for confirmado.</p>
         ) : null}
         {Math.abs(invoice.carriedCents) >= 100 ? (
-          <p className="text-[13px] text-muted-foreground">Compras desta fatura. A fatura do banco é {formatBRL(invoice.totalCents)} com saldo anterior, parcelamentos e encargos.</p>
+          <p className="text-[13px] text-muted-foreground">Compras desta fatura. A fatura do banco é <Money cents={invoice.totalCents} /> com saldo anterior, parcelamentos e encargos.</p>
         ) : null}
         <SegmentBar
           total={Math.max(1, invoice.settlement.totalCents)}
@@ -80,9 +80,9 @@ export default async function SplitInvoicePage({ params, searchParams }: { param
           ]}
         />
         <div className="grid grid-cols-3 gap-2 text-[13px]">
-          <span><span className="block text-muted-foreground">Nosso</span><span className="tabular font-medium">{formatBRL(invoice.holderTotals.ours)}</span></span>
-          <span><span className="block text-muted-foreground">De {holder.name}</span><span className="tabular font-medium">{formatBRL(invoice.holderTotals.holder)}</span></span>
-          <span><span className="block text-muted-foreground">De {other.name}</span><span className="tabular font-medium">{formatBRL(invoice.holderTotals.partner)}</span></span>
+          <span><span className="block text-muted-foreground">Nosso</span><span className="tabular font-medium"><Money cents={invoice.holderTotals.ours} /></span></span>
+          <span><span className="block text-muted-foreground">De {holder.name}</span><span className="tabular font-medium"><Money cents={invoice.holderTotals.holder} /></span></span>
+          <span><span className="block text-muted-foreground">De {other.name}</span><span className="tabular font-medium"><Money cents={invoice.holderTotals.partner} /></span></span>
         </div>
       </Card>
 
@@ -90,7 +90,7 @@ export default async function SplitInvoicePage({ params, searchParams }: { param
         <Link href={`/cards/${card.id}/settle?m=${offset}`} className="flex min-h-14 items-center gap-3 rounded-2xl bg-secondary px-4 py-3 text-secondary-foreground no-underline hover:text-secondary-foreground">
           <span className="min-w-0 flex-1">
             <span className="block text-[13px]">Para fechar a fatura</span>
-            <span className="block text-[15px] font-medium">{other.name} transfere {formatBRL(invoice.settlement.partnerOwesCents)} para {holder.name}{invoice.settled ? " · acertado" : ""}</span>
+            <span className="block text-[15px] font-medium">{other.name} transfere <Money cents={invoice.settlement.partnerOwesCents} /> para {holder.name}{invoice.settled ? " · acertado" : ""}</span>
           </span>
           <span aria-hidden="true">›</span>
         </Link>
@@ -103,7 +103,7 @@ export default async function SplitInvoicePage({ params, searchParams }: { param
 
       {groups.map((group) => (
         <section key={group.owner} className="grid gap-2">
-          <SectionHeader title={group.title} action={<span className="tabular text-sm font-medium">{formatBRL(group.total)}</span>} />
+          <SectionHeader title={group.title} action={<span className="tabular text-sm font-medium"><Money cents={group.total} /></span>} />
           {group.lines.length > 0 ? (
             <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
               {group.lines.map((line) => {
@@ -118,7 +118,7 @@ export default async function SplitInvoicePage({ params, searchParams }: { param
                         {line.fact.installment_number && line.fact.installment_total ? ` ${line.fact.installment_number}/${line.fact.installment_total}` : ""}
                       </span>
                       <span className="block text-[13px] text-muted-foreground">
-                        {remaining > 0 ? `${formatBRL(line.fact.amount_cents)} por mês · faltam ${remaining} (${formatBRL(line.fact.amount_cents * remaining)})` : `${formatDayShort(line.fact.transaction_date)} · ${line.fact.free_money ? "Dinheiro livre" : line.category}`}
+                        {remaining > 0 ? <><Money cents={line.fact.amount_cents} /> por mês · faltam {remaining} (<Money cents={line.fact.amount_cents * remaining} />)</> : `${formatDayShort(line.fact.transaction_date)} · ${line.fact.free_money ? "Dinheiro livre" : line.category}`}
                         {line.display === "category_only" && line.fact.user_id === user.id ? ` · ${other.name} vê só categoria` : ""}
                       </span>
                     </Link>
@@ -161,7 +161,7 @@ export default async function SplitInvoicePage({ params, searchParams }: { param
             {invoice.installmentsAhead.slice(0, 3).map((cents, i) => (
               <div key={i} className="rounded-[10px] bg-muted p-2 text-center">
                 <span className="block text-[12px] text-muted-foreground">{monthShort.format(new Date(`${shift(invoice.period.month, i + 1)}-01T00:00:00Z`)).replace(".", "")}</span>
-                <span className="tabular text-[13px] font-medium">{formatBRL(cents)}</span>
+                <span className="tabular text-[13px] font-medium"><Money cents={cents} /></span>
               </div>
             ))}
             {invoice.installmentsAhead.length > 3 ? (

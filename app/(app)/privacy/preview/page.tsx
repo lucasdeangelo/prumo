@@ -4,11 +4,11 @@ import { redirect } from "next/navigation";
 import { Amount, PageHeader } from "@/components/app/bits";
 import { Avatar, InstitutionMark, VisibilityBadge } from "@/components/app/couple";
 import { Card } from "@/components/ui/card";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { freeMoneyFor, loadAccounts, loadCategoryNames, loadFacts, toOwned } from "@/lib/application/couple-data";
 import { getHousehold } from "@/lib/application/household";
 import { formatDayShort, monthBounds, todayIn } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 import { keptPrivateSummary, partnerAccountsView } from "@/lib/domain/visibility";
 
 export const metadata = { title: "Como seu par vê · Prumo" };
@@ -77,7 +77,7 @@ export default async function PreviewPage() {
               <p className="border-t border-border px-4 py-3 text-[13px] text-muted-foreground">Nenhum lançamento compartilhado neste mês.</p>
             )
           ) : (
-            <p className="border-t border-border px-4 py-3 text-[13px] text-muted-foreground">Saiu {formatBRL(account.monthOutCents)} no mês · lançamentos não compartilhados.</p>
+            <p className="border-t border-border px-4 py-3 text-[13px] text-muted-foreground">Saiu <Money cents={account.monthOutCents} /> no mês · lançamentos não compartilhados.</p>
           )}
         </Card>
       ))}
@@ -86,7 +86,7 @@ export default async function PreviewPage() {
         <Card className="flex items-center justify-between gap-3">
           <span>
             <span className="block text-[15px] font-medium">Dinheiro livre de {me.name}</span>
-            <span className="block text-[13px] text-muted-foreground">{formatBRL(freeMoney.usedCents)} usados de {formatBRL(freeMoney.allowanceCents)}</span>
+            <span className="block text-[13px] text-muted-foreground"><Money cents={freeMoney.usedCents} /> usados de <Money cents={freeMoney.allowanceCents} /></span>
           </span>
           <VisibilityBadge kind="totals" />
         </Card>

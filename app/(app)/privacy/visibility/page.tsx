@@ -6,10 +6,10 @@ import { InstitutionMark, SpaceChip } from "@/components/app/couple";
 import { VisibilitySegment } from "@/components/app/visibility-segment";
 import { Card, EmptyState } from "@/components/ui/card";
 import { Input, SubmitButton } from "@/components/ui/form";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { loadAccounts } from "@/lib/application/couple-data";
 import { getHousehold } from "@/lib/application/household";
-import { formatBRL } from "@/lib/domain/money";
 
 export const metadata = { title: "Visibilidade das contas · Prumo" };
 
@@ -29,7 +29,7 @@ export default async function VisibilityPage() {
           <span className="block text-[13px] text-muted-foreground">
             {a.card_last4 ? `•• ${a.card_last4}` : ""}
             {a.card_last4 && a.balance_cents !== null ? " · " : ""}
-            {a.balance_cents !== null ? formatBRL(Math.abs(a.balance_cents)) : ""}
+            {a.balance_cents !== null ? <Money cents={Math.abs(a.balance_cents)} /> : ""}
           </span>
         </span>
       </div>

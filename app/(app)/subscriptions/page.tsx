@@ -2,16 +2,17 @@ import Link from "next/link";
 
 import { subscriptionStatusAction } from "@/app/(app)/actions";
 import { Amount, IconLink, PageHeader, StatTile, StateBadge } from "@/components/app/bits";
+import { HideValuesToggle } from "@/components/app/hide-values";
 import { PlusIcon, SparkIcon } from "@/components/app/icons";
 import { DetectButton } from "@/components/app/forms";
 import { Card, EmptyState } from "@/components/ui/card";
 import { SubmitButton } from "@/components/ui/form";
 import { requireUser } from "@/lib/auth/session";
 import { formatDayShort } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 import { FREQUENCY_LABEL, monthlyEquivalentCents } from "@/lib/domain/recurrence";
 import { listSubscriptions } from "@/lib/repositories/reads";
 import { UpdatedAt } from "@/components/app/couple";
+import { Money } from "@/components/app/money";
 import { lastSyncAt, loadSharedPlans } from "@/lib/application/couple-data";
 import { getHousehold } from "@/lib/application/household";
 import type { Subscription } from "@/lib/types";
@@ -70,7 +71,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
     <div className="grid gap-4">
       <PageHeader
         title="Assinaturas"
-        action={<IconLink href="/subscriptions/new" label="Nova assinatura" tone="tint"><PlusIcon className="size-5" strokeWidth={1.8} /></IconLink>}
+        action={<div className="flex items-center gap-1"><HideValuesToggle /><IconLink href="/subscriptions/new" label="Nova assinatura" tone="tint"><PlusIcon className="size-5" strokeWidth={1.8} /></IconLink></div>}
       />
       {partner ? (
         <div className="grid gap-2">
@@ -140,7 +141,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
         <details className="rounded-2xl border border-border bg-card p-3">
           <summary className="cursor-pointer text-sm font-medium">Canceladas ({past.length})</summary>
           <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
-            {past.map((s) => <li key={s.id} className="flex justify-between"><span>{s.name}</span><span className="tabular">{formatBRL(s.amount_cents)}</span></li>)}
+            {past.map((s) => <li key={s.id} className="flex justify-between"><span>{s.name}</span><span className="tabular"><Money cents={s.amount_cents} /></span></li>)}
           </ul>
         </details>
       ) : null}

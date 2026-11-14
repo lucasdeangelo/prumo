@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { CoupleAvatars } from "@/components/app/couple";
 import { ShareImageButton } from "@/components/app/share-image";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { goalsOverview } from "@/lib/application/couple-data";
 import { getHousehold } from "@/lib/application/household";
@@ -39,7 +40,7 @@ export default async function MilestonePage({ params }: { params: Promise<{ id: 
       <p className="label-mono">{goal.name}</p>
       <h1 className="text-[28px] font-medium tracking-[-0.02em]">{TITLE[pct]}</h1>
       <p className="max-w-xs text-[15px] text-muted-foreground">
-        {together ? "Vocês já guardaram" : "Você já guardou"} {formatBRL(goal.savedCents)}{together ? " juntos" : ""}.
+        {together ? "Vocês já guardaram" : "Você já guardou"} <Money cents={goal.savedCents} />{together ? " juntos" : ""}.
         {pct !== "100" && months ? ` Mais ${months === 1 ? "um mês" : `${months} meses`} nesse ritmo e ${together ? "vocês chegam" : "você chega"} lá.` : ""}
       </p>
       {together ? (

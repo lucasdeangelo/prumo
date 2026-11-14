@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/app/bits";
 import { CoupleAvatars } from "@/components/app/couple";
 import { ChevronRightIcon, SignOutIcon } from "@/components/app/icons";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { listConnections } from "@/lib/application/connections";
 import { loadAccounts, loadBudgets, loadSplitRules } from "@/lib/application/couple-data";
@@ -10,14 +11,13 @@ import { freeMoneyAllowance, getHousehold, listProposals } from "@/lib/applicati
 import { listPrivacyRules } from "@/lib/application/privacy";
 import { sharePercentLabel } from "@/lib/domain/couple";
 import { todayIn } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 import { getWhatsappLink } from "@/lib/repositories/reads";
 
 export const metadata = { title: "Ajustes · Prumo" };
 
 const since = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "America/Sao_Paulo" });
 
-function Row({ href, title, detail, alert }: { href: string; title: string; detail?: string; alert?: boolean }) {
+function Row({ href, title, detail, alert }: { href: string; title: string; detail?: React.ReactNode; alert?: boolean }) {
   return (
     <li>
       <Link href={href} className="flex min-h-14 items-center gap-3 px-4 py-3 text-foreground no-underline hover:bg-[#fafaf8] hover:text-foreground">
@@ -96,9 +96,9 @@ export default async function SettingsPage() {
 
       {partner && household ? (
         <Group label="Combinados do casal">
-          <Row href="/couple/budget" title="Orçamento do lar" detail={budgetTotal ? `${formatBRL(budgetTotal)} por mês${household.budgetAlerts ? " · avisos em 80% e 100%" : ""}` : "Ainda não combinado"} />
-          <Row href="/couple/free-money" title="Dinheiro livre" detail={`${freeMine !== null ? `${formatBRL(freeMine)} cada` : "Ainda não combinado"}${freeProposal ? " · proposta aguardando" : ""}`} />
-          <Row href="/couple/approvals" title="Compras grandes" detail={household.approvalThresholdCents ? `Conversar antes acima de ${formatBRL(household.approvalThresholdCents)}` : "Sem limite combinado"} />
+          <Row href="/couple/budget" title="Orçamento do lar" detail={budgetTotal ? <><Money cents={budgetTotal} /> por mês{household.budgetAlerts ? " · avisos em 80% e 100%" : ""}</> : "Ainda não combinado"} />
+          <Row href="/couple/free-money" title="Dinheiro livre" detail={<>{freeMine !== null ? <><Money cents={freeMine} /> cada</> : "Ainda não combinado"}{freeProposal ? " · proposta aguardando" : ""}</>} />
+          <Row href="/couple/approvals" title="Compras grandes" detail={household.approvalThresholdCents ? <>Conversar antes acima de <Money cents={household.approvalThresholdCents} /></> : "Sem limite combinado"} />
           <Row href="/couple" title="Divisão das contas" detail={`${household.defaultSplit === "income" ? `Pela renda (${sharePercentLabel(people[0] === household.me ? household.myShare : 1 - household.myShare)})` : "50/50"}${equalIn.length ? ` · 50/50 em ${equalIn.join(", ")}` : ""}`} />
           <Row href="/couple/goals" title="Metas" />
         </Group>
@@ -111,7 +111,7 @@ export default async function SettingsPage() {
           detail={banks.size ? `${banks.size} ${banks.size === 1 ? "banco" : "bancos"}${failing.length ? ` · ${failing.join(", ")} ${failing.length === 1 ? "precisa de atenção" : "precisam de atenção"}` : ""}` : "Nenhum banco conectado"}
           alert={failing.length > 0}
         />
-        <Row href="/settings/accounts" title="Contas manuais" detail={manual.length ? manual.slice(0, 2).map((a) => `${a.name}${a.balance_cents !== null ? ` · ${formatBRL(a.balance_cents)}` : ""}`).join(" · ") : "Carteira, dinheiro guardado…"} />
+        <Row href="/settings/accounts" title="Contas manuais" detail={manual.length ? manual.slice(0, 2).map((a, i) => <span key={a.id}>{i > 0 ? " · " : ""}{a.name}{a.balance_cents !== null ? <> · <Money cents={a.balance_cents} /></> : null}</span>) : "Carteira, dinheiro guardado…"} />
         <Row href="/settings/whatsapp" title="WhatsApp" detail={link?.verified_at ? `Vinculado${link.phone_normalized && !link.chat_id?.endsWith("@lid") ? ` · ${link.phone_normalized}` : ""}` : "Registrar gastos e receber avisos"} />
         <Row href="/settings/tags" title="Tags e regras de categoria" detail={partner ? "Valem para os dois" : undefined} />
       </Group>

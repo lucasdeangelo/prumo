@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Avatar, type Person } from "@/components/app/couple";
-import { formatBRL } from "@/lib/domain/money";
+import { Money } from "@/components/app/money";
 
 const when = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", timeZone: "America/Sao_Paulo" });
 const time = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
@@ -50,7 +50,7 @@ export function ApprovalCard({ row, people, viewerId }: { row: ApprovalRow; peop
           <span className="block truncate text-[15px] font-medium">{row.title}</span>
           <span className="block text-[13px] text-muted-foreground">{requester?.name ?? ""} · {relative(row.created_at)}</span>
         </span>
-        <span className="tabular text-[15px] font-medium">{formatBRL(row.amount_cents)}</span>
+        <span className="tabular text-[15px] font-medium"><Money cents={row.amount_cents} /></span>
       </div>
       {row.note ? <p className="text-sm text-muted-foreground">“{row.note}”</p> : null}
       <div className="flex items-center justify-between gap-2">

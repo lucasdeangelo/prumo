@@ -3,19 +3,20 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Amount, IconLink, MonthSwitcher, PageHeader, SectionHeader } from "@/components/app/bits";
+import { HideValuesToggle } from "@/components/app/hide-values";
 import { DownloadIcon } from "@/components/app/icons";
 import { TransactionList } from "@/components/app/transaction-list";
 import { CategoryBars } from "@/components/charts/category-bars";
 import { CumulativeLine } from "@/components/charts/cumulative-line";
 import { Card, CardTitle, EmptyState } from "@/components/ui/card";
 import { SpaceSwitcher, UpdatedAt } from "@/components/app/couple";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { lastSyncAt, loadSharedHistory, loadSharedPlans } from "@/lib/application/couple-data";
 import { getHousehold } from "@/lib/application/household";
 import { overdraftFor } from "@/lib/application/overdraft";
 import { currentSpace } from "@/lib/space";
 import { formatDayShort, formatMonthLong, isMonthKey, monthBounds, monthOf, todayIn } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 import { summarizeMonth } from "@/lib/domain/summary";
 import { listBills, listTags, listTransactions } from "@/lib/repositories/reads";
 import { cn } from "@/lib/utils";
@@ -98,7 +99,7 @@ export default async function MonthPage({ params, searchParams }: { params: Prom
     <div className="grid gap-5">
       <PageHeader
         title="Mês"
-        action={<IconLink href={`/api/export/${month}`} label="Exportar CSV" download><DownloadIcon className="size-5" /></IconLink>}
+        action={<div className="flex"><HideValuesToggle /><IconLink href={`/api/export/${month}`} label="Exportar CSV" download><DownloadIcon className="size-5" /></IconLink></div>}
       />
       {household ? <SpaceSwitcher space={nosso ? "nosso" : "meu"} me={household.me} partner={partner} returnTo={`/monthly/${month}`} /> : null}
       <MonthSwitcher label={formatMonthLong(month)} prevHref={`/monthly/${prev}`} nextHref={month < current ? `/monthly/${next}` : undefined} />
@@ -107,13 +108,13 @@ export default async function MonthPage({ params, searchParams }: { params: Prom
       <section className="flex flex-col gap-4 rounded-2xl bg-primary p-5 text-primary-foreground">
         <div className="flex flex-col gap-1.5">
           <span className="label-mono text-[#cfe0d8]">{month >= current ? "Deve sobrar no fim do mês" : "Sobrou no mês"}</span>
-          <span className="tabular text-[40px] font-medium leading-[1.05] tracking-[-0.03em]">{formatBRL(month >= current ? projected : summary.netCents)}</span>
+          <span className="tabular text-[40px] font-medium leading-[1.05] tracking-[-0.03em]"><Money cents={month >= current ? projected : summary.netCents} /></span>
         </div>
         <div className="grid grid-cols-3 gap-2 border-t border-white/20 pt-3.5">
-          <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">Entrou<span className="tabular text-[15px] font-medium text-white">{formatBRL(summary.incomeCents)}</span></span>
-          <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">Saiu<span className="tabular text-[15px] font-medium text-white">{formatBRL(summary.expenseCents)}</span></span>
+          <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">Entrou<span className="tabular text-[15px] font-medium text-white"><Money cents={summary.incomeCents} /></span></span>
+          <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">Saiu<span className="tabular text-[15px] font-medium text-white"><Money cents={summary.expenseCents} /></span></span>
           {month >= current ? (
-            <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">Falta pagar<span className="tabular text-[15px] font-medium text-white">{formatBRL(toPay)}</span></span>
+            <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">Falta pagar<span className="tabular text-[15px] font-medium text-white"><Money cents={toPay} /></span></span>
           ) : (
             <span className="flex flex-col gap-0.5 text-xs text-[#cfe0d8]">vs. anterior<span className="tabular text-[15px] font-medium text-white">{deltaPct === null ? "—" : `${deltaPct > 0 ? "+" : ""}${deltaPct}%`}</span></span>
           )}
@@ -125,12 +126,12 @@ export default async function MonthPage({ params, searchParams }: { params: Prom
                 Cheque especial {o.account.institution ?? o.account.name}: {o.negativeDays} {o.negativeDays === 1 ? "dia" : "dias"} no negativo
                 {o.lowestDate ? (
                   <>
-                    , chegando a <span className="tabular font-medium text-white">{formatBRL(o.lowestCents)}</span> em {formatDayShort(o.lowestDate)}
+                    , chegando a <span className="tabular font-medium text-white"><Money cents={o.lowestCents} /></span> em {formatDayShort(o.lowestDate)}
                   </>
                 ) : null}
                 {o.chargesCents > 0 ? (
                   <>
-                    {" · "}juros e IOF <span className="tabular font-medium text-white">{formatBRL(o.chargesCents)}</span>, já nas saídas
+                    {" · "}juros e IOF <span className="tabular font-medium text-white"><Money cents={o.chargesCents} /></span>, já nas saídas
                   </>
                 ) : null}
               </span>

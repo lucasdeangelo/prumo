@@ -4,10 +4,10 @@ import { cancelBillAction, payBillAction } from "@/app/(app)/actions";
 import { Amount, PageHeader } from "@/components/app/bits";
 import { Card, CardTitle } from "@/components/ui/card";
 import { SubmitButton } from "@/components/ui/form";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { billCandidates } from "@/lib/application/bills";
 import { formatDayLabel, todayIn } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 import { FREQUENCY_LABEL } from "@/lib/domain/recurrence";
 import { listBills } from "@/lib/repositories/reads";
 import { transactionLabel } from "@/lib/types";
@@ -53,7 +53,7 @@ export default async function BillPage({ params }: { params: Promise<{ id: strin
                       <input type="hidden" name="transactionId" value={c.transactionId} />
                       <div className="min-w-0 flex-1 text-sm">
                         <p className="truncate font-medium">{transactionLabel(c.transaction)}</p>
-                        <p className="text-xs text-muted-foreground">{formatDayLabel(c.transaction.transaction_date)} · {formatBRL(c.transaction.amount_cents)}</p>
+                        <p className="text-xs text-muted-foreground">{formatDayLabel(c.transaction.transaction_date)} · <Money cents={c.transaction.amount_cents} /></p>
                       </div>
                       <SubmitButton variant="secondary" pendingText="…">É esta</SubmitButton>
                     </form>

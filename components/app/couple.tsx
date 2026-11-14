@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { setSpaceAction } from "@/app/(app)/couple-actions";
+import { HideValuesToggle } from "@/components/app/hide-values";
 import { formatBRL } from "@/lib/domain/money";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +44,7 @@ export function CoupleAvatars({ people, size = 36 }: { people: Person[]; size?: 
 }
 
 /** 01 · Seletor de espaço: segmented Meu | Nosso with the "who sees" caption under it. */
-export function SpaceSwitcher({ space, me, partner, returnTo }: { space: "meu" | "nosso"; me: Person; partner: Person | null; returnTo: string }) {
+export function SpaceSwitcher({ space, me, partner, returnTo, hideValues }: { space: "meu" | "nosso"; me: Person; partner: Person | null; returnTo: string; hideValues?: boolean }) {
   // "Sempre juntos, sempre na mesma ordem": the blue person first for both of them.
   const pair = partner ? (me.color === "blue" ? [me, partner] : [partner, me]) : [me];
   const caption = space === "nosso" ? `${pair.map((p) => p.name).join(" e ")} veem este espaço` : `Seu espaço. ${partner?.name ?? "Seu par"} só vê o que você compartilha.`;
@@ -70,6 +71,7 @@ export function SpaceSwitcher({ space, me, partner, returnTo }: { space: "meu" |
           })}
         </div>
         {space === "nosso" && partner ? <CoupleAvatars people={pair} size={32} /> : <Avatar person={me} size={32} />}
+        {hideValues ? <HideValuesToggle className="-my-1 -ml-1 -mr-3" /> : null}
       </form>
       <p className="px-1 text-[13px] text-muted-foreground">{caption}</p>
     </div>

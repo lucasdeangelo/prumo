@@ -5,10 +5,10 @@ import { PageHeader } from "@/components/app/bits";
 import { Avatar, SpaceChip } from "@/components/app/couple";
 import { Card } from "@/components/ui/card";
 import { SubmitButton } from "@/components/ui/form";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { budgetOverview, loadCoupleContext } from "@/lib/application/couple-data";
 import { listApprovals } from "@/lib/application/plans";
-import { formatBRL } from "@/lib/domain/money";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = { title: "Combinar uma compra · Prumo" };
@@ -46,23 +46,23 @@ export default async function ApprovalPage({ params }: { params: Promise<{ id: s
       </div>
       {waitingMe ? <span className="w-fit rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Esperando você</span> : null}
       <h1 className="text-2xl font-medium tracking-[-0.02em]">{row.requested_by === user.id ? "Você quer combinar uma compra" : `${requester.name} quer combinar uma compra com você`}</h1>
-      {household.approvalThresholdCents ? <p className="text-sm text-muted-foreground">Vocês combinaram conversar sobre compras do Nosso acima de {formatBRL(household.approvalThresholdCents)}.</p> : null}
+      {household.approvalThresholdCents ? <p className="text-sm text-muted-foreground">Vocês combinaram conversar sobre compras do Nosso acima de <Money cents={household.approvalThresholdCents} />.</p> : null}
 
       <Card className="grid gap-3">
         <div>
           <p className="text-lg font-medium">{row.title}</p>
           <p className="text-sm text-muted-foreground">{[row.merchant, row.category].filter(Boolean).join(" · ")}</p>
         </div>
-        <p className="tabular text-[32px] font-medium tracking-[-0.03em]">{formatBRL(row.amount_cents)}</p>
-        {row.installments > 1 ? <p className="text-sm text-muted-foreground">{row.installments}x de {formatBRL(monthly)}</p> : null}
+        <p className="tabular text-[32px] font-medium tracking-[-0.03em]"><Money cents={row.amount_cents} /></p>
+        {row.installments > 1 ? <p className="text-sm text-muted-foreground">{row.installments}x de <Money cents={monthly} /></p> : null}
         {row.note ? <p className="flex items-start gap-2 text-sm"><Avatar person={requester} size={24} /><span className="text-muted-foreground">“{row.note}”</span></p> : null}
       </Card>
 
       <Card className="grid gap-2 text-sm">
         <p className="label-mono">Como fica para vocês</p>
-        <div className="flex justify-between"><span>{row.installments > 1 ? "Parcela no orçamento do lar" : "No orçamento do lar"}</span><span className="tabular font-medium">{formatBRL(monthly)}{row.installments > 1 ? "/mês" : ""}</span></div>
-        {categoryLine ? <div className="flex justify-between"><span>{categoryLine.category} este mês</span><span className="tabular">{categoryLine.remainingCents >= 0 ? `restam ${formatBRL(categoryLine.remainingCents)}` : `passou ${formatBRL(-categoryLine.remainingCents)}`}</span></div> : null}
-        {runningMonthly > 0 ? <div className="flex justify-between"><span>Parcelas já em andamento</span><span className="tabular">{formatBRL(runningMonthly)}/mês</span></div> : null}
+        <div className="flex justify-between"><span>{row.installments > 1 ? "Parcela no orçamento do lar" : "No orçamento do lar"}</span><span className="tabular font-medium"><Money cents={monthly} />{row.installments > 1 ? "/mês" : ""}</span></div>
+        {categoryLine ? <div className="flex justify-between"><span>{categoryLine.category} este mês</span><span className="tabular">{categoryLine.remainingCents >= 0 ? <>restam <Money cents={categoryLine.remainingCents} /></> : <>passou <Money cents={-categoryLine.remainingCents} /></>}</span></div> : null}
+        {runningMonthly > 0 ? <div className="flex justify-between"><span>Parcelas já em andamento</span><span className="tabular"><Money cents={runningMonthly} />/mês</span></div> : null}
       </Card>
 
       {waitingMe ? (

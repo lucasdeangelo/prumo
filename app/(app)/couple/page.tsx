@@ -4,11 +4,12 @@ import { CoupleAvatars } from "@/components/app/couple";
 import { InviteButton, JoinForm, MemberForm } from "@/components/app/couple-forms";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Select, SubmitButton } from "@/components/ui/form";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { getHousehold, listProposals } from "@/lib/application/household";
 import { loadSplitRules } from "@/lib/application/couple-data";
 import { sharePercentLabel } from "@/lib/domain/couple";
-import { centsToInput, formatBRL } from "@/lib/domain/money";
+import { centsToInput } from "@/lib/domain/money";
 import { getServerEnv } from "@/lib/env.server";
 
 export const metadata = { title: "Casal · Prumo" };
@@ -22,16 +23,16 @@ const KIND_LABEL: Record<string, string> = {
   split: "Divisão das contas",
 };
 
-function describeProposal(kind: string, payload: Record<string, unknown>): string {
-  if (kind === "approval_threshold") return payload.amountCents ? `Conversar antes acima de ${formatBRL(payload.amountCents as number)}` : "Sem limite para conversar";
+function describeProposal(kind: string, payload: Record<string, unknown>): React.ReactNode {
+  if (kind === "approval_threshold") return payload.amountCents ? <>Conversar antes acima de <Money cents={payload.amountCents as number} /></> : "Sem limite para conversar";
   if (kind === "split") return payload.defaultSplit === "equal" ? "Dividir tudo 50/50" : "Dividir pela renda";
   if (kind === "budget") {
     const lines = (payload.lines as Array<{ amountCents: number }>) ?? [];
-    return `${formatBRL(lines.reduce((s, l) => s + l.amountCents, 0))} por mês em ${lines.length} categorias`;
+    return <><Money cents={lines.reduce((s, l) => s + l.amountCents, 0)} /> por mês em {lines.length} categorias</>;
   }
   if (kind === "free_money") {
     const amounts = Object.values((payload.amounts as Record<string, number>) ?? {});
-    return amounts.length ? `${formatBRL(amounts[0])} por mês para cada um` : "";
+    return amounts.length ? <><Money cents={amounts[0]} /> por mês para cada um</> : "";
   }
   return "";
 }

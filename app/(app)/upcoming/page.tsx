@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Amount, IconLink, PageHeader, StatTile, StateBadge } from "@/components/app/bits";
+import { HideValuesToggle } from "@/components/app/hide-values";
 import { PlusIcon, RepeatIcon } from "@/components/app/icons";
 import { Card, EmptyState } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
@@ -33,7 +34,7 @@ export default async function UpcomingPage({ searchParams }: { searchParams: Pro
         title="Contas futuras"
         subtitle={`Próximos ${range} dias`}
         back="/monthly"
-        action={<IconLink href="/upcoming/new" label="Nova conta" tone="tint"><PlusIcon className="size-5" strokeWidth={1.8} /></IconLink>}
+        action={<div className="flex items-center gap-1"><HideValuesToggle /><IconLink href="/upcoming/new" label="Nova conta" tone="tint"><PlusIcon className="size-5" strokeWidth={1.8} /></IconLink></div>}
       />
       <div className="flex gap-2">
         {RANGES.map((r) => (

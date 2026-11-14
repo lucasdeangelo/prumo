@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
-import { formatBRL } from "@/lib/domain/money";
+import { Money } from "@/components/app/money";
 import { cn } from "@/lib/utils";
 
 /** Screen title (Título · 24/32 · 500), optional back arrow and a trailing action. */
@@ -42,7 +42,7 @@ export function Amount({ cents, type, className }: { cents: number; type?: "cred
   return (
     <span className={cn("tabular whitespace-nowrap font-medium", positive && "text-success", className)}>
       {positive ? "+ " : negative ? "− " : ""}
-      {formatBRL(cents)}
+      <Money cents={cents} />
     </span>
   );
 }
@@ -81,7 +81,7 @@ export function StatTile({ label, cents, tone, hint }: { label: string; cents: n
         {tone ? <span aria-hidden="true" className="size-2 rounded-full" style={{ background: tone === "in" ? "var(--series-income)" : "var(--series-expense)" }} /> : null}
         {label}
       </p>
-      <p className="tabular text-[clamp(0.95rem,4.2vw,1.25rem)] font-medium">{formatBRL(cents)}</p>
+      <p className="tabular text-[clamp(0.95rem,4.2vw,1.25rem)] font-medium"><Money cents={cents} /></p>
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   );

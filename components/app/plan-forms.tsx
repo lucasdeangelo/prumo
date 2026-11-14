@@ -12,14 +12,15 @@ import {
   type PlanState,
 } from "@/app/(app)/couple/plan-actions";
 import { Field, FormMessage, Input, Select, SubmitButton } from "@/components/ui/form";
-import { centsToInput, formatBRL, parseBRL } from "@/lib/domain/money";
+import { Money } from "@/components/app/money";
+import { centsToInput, parseBRL } from "@/lib/domain/money";
 import { cn } from "@/lib/utils";
 
 // ---------- Budget setup ----------
 
-export function BudgetSetupForm({ initial, partnerName }: { initial: Array<{ category: string; amountCents: number; hint: string }>; partnerName: string }) {
+export function BudgetSetupForm({ initial, partnerName }: { initial: Array<{ category: string; amountCents: number; averageCents: number }>; partnerName: string }) {
   const [state, action] = useActionState<PlanState, FormData>(proposeBudgetAction, undefined);
-  const [rows, setRows] = useState(initial.length ? initial.map((r) => ({ ...r, value: centsToInput(r.amountCents) })) : [{ category: "", amountCents: 0, hint: "", value: "" }]);
+  const [rows, setRows] = useState(initial.length ? initial.map((r) => ({ ...r, value: centsToInput(r.amountCents) })) : [{ category: "", amountCents: 0, averageCents: 0, value: "" }]);
   const total = rows.reduce((s, r) => s + (parseBRL(r.value) ?? 0), 0);
   return (
     <form action={action} className="grid gap-4">
@@ -30,16 +31,16 @@ export function BudgetSetupForm({ initial, partnerName }: { initial: Array<{ cat
               <Input name="category" aria-label="Categoria" value={row.category} onChange={(e) => setRows(rows.map((r, j) => (j === i ? { ...r, category: e.target.value } : r)))} placeholder="Categoria" />
               <Input name="amount" aria-label={`Valor para ${row.category || "a categoria"}`} inputMode="decimal" value={row.value} onChange={(e) => setRows(rows.map((r, j) => (j === i ? { ...r, value: e.target.value } : r)))} placeholder="0,00" className="tabular text-right" />
             </div>
-            {row.hint ? <span className="text-[13px] text-muted-foreground">{row.hint}</span> : null}
+            {row.averageCents ? <span className="text-[13px] text-muted-foreground">Média: <Money cents={row.averageCents} /></span> : null}
           </li>
         ))}
       </ul>
-      <button type="button" className="min-h-11 text-left text-sm font-medium text-primary" onClick={() => setRows([...rows, { category: "", amountCents: 0, hint: "", value: "" }])}>
+      <button type="button" className="min-h-11 text-left text-sm font-medium text-primary" onClick={() => setRows([...rows, { category: "", amountCents: 0, averageCents: 0, value: "" }])}>
         + Adicionar categoria
       </button>
       <div className="flex items-center justify-between rounded-2xl bg-secondary px-4 py-3 text-secondary-foreground">
         <span className="text-[15px] font-medium">Total do lar por mês</span>
-        <span className="tabular text-lg font-medium">{formatBRL(total)}</span>
+        <span className="tabular text-lg font-medium"><Money cents={total} /></span>
       </div>
       <FormMessage state={state} />
       <SubmitButton className="w-full">Enviar para {partnerName} revisar</SubmitButton>
@@ -80,7 +81,7 @@ export function ApprovalRequestForm({ categories }: { categories: string[] }) {
           </Select>
         </Field>
       </div>
-      {installments > 1 && cents > 0 ? <p className="text-[13px] text-muted-foreground">{installments}x de {formatBRL(Math.round(cents / installments))}</p> : null}
+      {installments > 1 && cents > 0 ? <p className="text-[13px] text-muted-foreground">{installments}x de <Money cents={Math.round(cents / installments)} /></p> : null}
       <Field label="Categoria">
         <Select name="category" defaultValue="">
           <option value="">Sem categoria</option>
@@ -144,8 +145,8 @@ export function GoalForm({ meName, partnerName, incomeShare }: { meName: string;
       {monthly ? (
         <div className="rounded-2xl bg-secondary px-4 py-3 text-secondary-foreground">
           <p className="text-[13px]">Para chegar em {new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${deadline}-01T00:00:00Z`))}</p>
-          <p className="tabular text-lg font-medium">{formatBRL(monthly)} por mês{partnerName ? " juntos" : ""}</p>
-          {partnerName && method === "percent" ? <p className="text-[13px]">{meName} {formatBRL(Math.round(monthly * mineShare))} · {partnerName} {formatBRL(monthly - Math.round(monthly * mineShare))}</p> : null}
+          <p className="tabular text-lg font-medium"><Money cents={monthly} /> por mês{partnerName ? " juntos" : ""}</p>
+          {partnerName && method === "percent" ? <p className="text-[13px]">{meName} <Money cents={Math.round(monthly * mineShare)} /> · {partnerName} <Money cents={monthly - Math.round(monthly * mineShare)} /></p> : null}
         </div>
       ) : null}
       <FormMessage state={state} />

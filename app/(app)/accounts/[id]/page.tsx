@@ -9,8 +9,8 @@ import { lastSyncAt, loadAccounts, loadCategoryNames, loadFacts, toOwned } from 
 import { getHousehold } from "@/lib/application/household";
 import { overdraftFor, overdraftNow } from "@/lib/application/overdraft";
 import { OverdraftCard } from "@/components/app/overdraft-card";
+import { Money } from "@/components/app/money";
 import { formatDayShort, formatMonthLong, monthBounds, todayIn } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 import { partnerAccountsView } from "@/lib/domain/visibility";
 
 export const metadata = { title: "Conta · Prumo" };
@@ -45,20 +45,20 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
         <InstitutionMark name={account.institution ?? account.name} />
         <span className="min-w-0 flex-1">
           <span className="block text-[13px] text-muted-foreground">Saldo</span>
-          <span className="tabular block text-2xl font-medium">{account.balance_cents !== null ? formatBRL(account.balance_cents) : "—"}</span>
+          <span className="tabular block text-2xl font-medium">{account.balance_cents !== null ? <Money cents={account.balance_cents} /> : "—"}</span>
         </span>
         <VisibilityBadge kind={account.visibility} />
       </Card>
       {overdraft ? (
         <Card className="grid grid-cols-3 gap-2 text-[13px]">
-          <span><span className="block text-muted-foreground">Cheque especial</span><span className="tabular font-medium">{formatBRL(overdraft.limitCents)}</span></span>
-          <span><span className="block text-muted-foreground">Em uso</span><span className="tabular font-medium">{formatBRL(overdraft.usedCents)}</span></span>
-          <span><span className="block text-muted-foreground">Disponível com limite</span><span className="tabular font-medium">{formatBRL(overdraft.availableCents)}</span></span>
+          <span><span className="block text-muted-foreground">Cheque especial</span><span className="tabular font-medium"><Money cents={overdraft.limitCents} /></span></span>
+          <span><span className="block text-muted-foreground">Em uso</span><span className="tabular font-medium"><Money cents={overdraft.usedCents} /></span></span>
+          <span><span className="block text-muted-foreground">Disponível com limite</span><span className="tabular font-medium"><Money cents={overdraft.availableCents} /></span></span>
         </Card>
       ) : null}
       <OverdraftCard items={overdraftMonthItems} monthLabel={formatMonthLong(today.slice(0, 7)).split(" ")[0].toLowerCase()} />
       <UpdatedAt at={syncedAt} />
-      <p className="text-sm text-muted-foreground">Saiu {formatBRL(view.monthOutCents)} neste mês.</p>
+      <p className="text-sm text-muted-foreground">Saiu <Money cents={view.monthOutCents} /> neste mês.</p>
 
       {account.visibility === "totals" && !mine ? (
         <EmptyState title="Só totais">{ownerName} compartilha o saldo e quanto saiu no mês, sem os lançamentos.</EmptyState>

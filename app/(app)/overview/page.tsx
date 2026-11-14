@@ -5,6 +5,7 @@ import { CoupleAvatars, InstitutionMark, SegmentBar, SpaceSwitcher, UpdatedAt, V
 import { BalanceCard, HomeAnalytics } from "@/components/app/home-analytics";
 import { ChevronRightIcon } from "@/components/app/icons";
 import { Card, EmptyState } from "@/components/ui/card";
+import { Money } from "@/components/app/money";
 import { getHousehold } from "@/lib/application/household";
 import { requireUser } from "@/lib/auth/session";
 import {
@@ -45,7 +46,7 @@ export default async function OverviewPage() {
 
   return (
     <div className="grid gap-5">
-      <SpaceSwitcher space={shownSpace} me={me} partner={partner} returnTo="/overview" />
+      <SpaceSwitcher space={shownSpace} me={me} partner={partner} returnTo="/overview" hideValues />
       {shownSpace === "nosso" ? (
         partner && household ? (
           <NossoHome userId={user.id} household={household} ctxIn={ctx} today={today} month={month} lowerMonth={lowerMonth} historyStart={historyStart} />
@@ -110,9 +111,9 @@ async function MeuHome({ userId, db, household, ctxIn, today, month, lowerMonth,
             <span className="label-mono">Dinheiro livre</span>
             <VisibilityBadge kind="totals" />
           </div>
-          <p className="tabular mt-2 text-[32px] font-medium tracking-[-0.03em]">{formatBRL(freeMoney.remainingCents)} <span className="text-base text-muted-foreground">restam</span></p>
+          <p className="tabular mt-2 text-[32px] font-medium tracking-[-0.03em]"><Money cents={freeMoney.remainingCents} /> <span className="text-base text-muted-foreground">restam</span></p>
           <div className="mt-3"><SegmentBar segments={[{ value: freeMoney.usedCents, color: PERSON_BG[household!.me.color] }]} total={freeMoney.allowanceCents} label={`${formatBRL(freeMoney.usedCents)} de ${formatBRL(freeMoney.allowanceCents)}`} /></div>
-          <p className="mt-2 text-[13px] text-muted-foreground">{formatBRL(freeMoney.usedCents)} de {formatBRL(freeMoney.allowanceCents)} · renova em 1º de {monthName.format(new Date(`${freeMoney.renewsOn}T00:00:00Z`))}. {partnerName.charAt(0).toUpperCase() + partnerName.slice(1)} vê só o total.</p>
+          <p className="mt-2 text-[13px] text-muted-foreground"><Money cents={freeMoney.usedCents} /> de <Money cents={freeMoney.allowanceCents} /> · renova em 1º de {monthName.format(new Date(`${freeMoney.renewsOn}T00:00:00Z`))}. {partnerName.charAt(0).toUpperCase() + partnerName.slice(1)} vê só o total.</p>
         </Link>
       ) : null}
 
@@ -228,8 +229,8 @@ async function NossoHome({ userId, household, ctxIn, today, month, lowerMonth, h
       {budget.lines.length > 0 ? (
         <Link href="/couple/budget" className="block rounded-2xl border border-border bg-card p-5 text-foreground no-underline hover:text-foreground">
           <span className="label-mono">Livre no orçamento do lar</span>
-          <p className={`tabular mt-2 text-[32px] font-medium tracking-[-0.03em] ${budget.freeCents < 0 ? "text-danger" : ""}`}>{formatBRL(budget.freeCents)}</p>
-          <p className="mt-1 text-[13px] text-muted-foreground">{formatBRL(budget.usedCents)} de {formatBRL(budget.limitCents)} usados · {daysLeftInMonth(today)} dias pela frente</p>
+          <p className={`tabular mt-2 text-[32px] font-medium tracking-[-0.03em] ${budget.freeCents < 0 ? "text-danger" : ""}`}><Money cents={budget.freeCents} /></p>
+          <p className="mt-1 text-[13px] text-muted-foreground"><Money cents={budget.usedCents} /> de <Money cents={budget.limitCents} /> usados · {daysLeftInMonth(today)} dias pela frente</p>
         </Link>
       ) : (
         <Link href="/couple/budget/setup" className="flex min-h-14 items-center gap-3 rounded-2xl border border-dashed border-[#cdd0ca] bg-card/60 px-4 py-3 text-foreground no-underline hover:text-foreground">
@@ -248,8 +249,8 @@ async function NossoHome({ userId, household, ctxIn, today, month, lowerMonth, h
             <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Pendente</span>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            {pending[0].title} · {formatBRL(pending[0].amount_cents)}{pending[0].installments > 1 ? ` em ${pending[0].installments}x` : ""}.
-            {household.approvalThresholdCents ? ` Acima do combinado de ${formatBRL(household.approvalThresholdCents)}.` : ""}
+            {pending[0].title} · <Money cents={pending[0].amount_cents} />{pending[0].installments > 1 ? ` em ${pending[0].installments}x` : ""}.
+            {household.approvalThresholdCents ? <> Acima do combinado de <Money cents={household.approvalThresholdCents} />.</> : ""}
           </p>
           <span className="mt-3 inline-flex text-sm font-medium text-primary">Ver e responder</span>
         </Link>
@@ -280,7 +281,7 @@ async function NossoHome({ userId, household, ctxIn, today, month, lowerMonth, h
           </div>
           {invoice.settlement.partnerOwesCents > 0 ? (
             <p className="mt-3 text-sm">
-              Acerto: {invoice.holderIsMe ? partner.name : household.me.name} → {invoice.holderIsMe ? household.me.name : partner.name} <span className="tabular font-medium">{formatBRL(invoice.settlement.partnerOwesCents)}</span>
+              Acerto: {invoice.holderIsMe ? partner.name : household.me.name} → {invoice.holderIsMe ? household.me.name : partner.name} <span className="tabular font-medium"><Money cents={invoice.settlement.partnerOwesCents} /></span>
             </p>
           ) : null}
         </Link>
@@ -297,7 +298,7 @@ async function NossoHome({ userId, household, ctxIn, today, month, lowerMonth, h
                   <SegmentBar total={g.targetCents} label={`${formatBRL(g.savedCents)} de ${formatBRL(g.targetCents)}`} segments={people.map((p) => ({ value: g.byUser[p.userId] ?? 0, color: PERSON_BG[p.color] }))} />
                 </div>
                 <p className="mt-2 text-[13px] text-muted-foreground">
-                  {formatBRL(g.savedCents)} de {formatBRL(g.targetCents)}
+                  <Money cents={g.savedCents} /> de <Money cents={g.targetCents} />
                   {g.progress.reachMonth ? ` · no ritmo, chegam em ${formatMonthLong(g.progress.reachMonth).toLowerCase()}` : g.deadline ? "" : " · sem prazo"}
                 </p>
               </Link>

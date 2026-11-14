@@ -1,8 +1,8 @@
 import Link from "next/link";
 
+import { Money } from "@/components/app/money";
 import type { AccountOverdraft } from "@/lib/application/overdraft";
 import { formatDayShort } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 
 /** "Cheque especial" in a month: days below zero, lowest point and what it cost. */
 export function OverdraftCard({ items, monthLabel }: { items: AccountOverdraft[]; monthLabel: string }) {
@@ -22,7 +22,7 @@ export function OverdraftCard({ items, monthLabel }: { items: AccountOverdraft[]
           {o.negativeDays > 0 ? (
             <p className="text-[15px]">
               Em {monthLabel} a conta ficou negativa por {o.negativeDays} {o.negativeDays === 1 ? "dia" : "dias"}. Menor saldo:{" "}
-              <span className="tabular font-medium">{formatBRL(o.lowestCents)}</span>
+              <span className="tabular font-medium"><Money cents={o.lowestCents} /></span>
               {o.lowestDate ? ` em ${formatDayShort(o.lowestDate)}` : ""}.
             </p>
           ) : (
@@ -31,13 +31,13 @@ export function OverdraftCard({ items, monthLabel }: { items: AccountOverdraft[]
           <dl className="grid grid-cols-2 gap-2 text-[13px]">
             <div>
               <dt className="text-muted-foreground">Juros e IOF no mês</dt>
-              <dd className="tabular font-medium">{formatBRL(o.chargesCents)}</dd>
+              <dd className="tabular font-medium"><Money cents={o.chargesCents} /></dd>
             </div>
             {o.account.overdraft_limit_cents !== null ? (
               <div>
                 <dt className="text-muted-foreground">Limite hoje</dt>
                 <dd className="tabular font-medium">
-                  {formatBRL(o.account.overdraft_used_cents ?? 0)} usados de {formatBRL(o.account.overdraft_limit_cents)}
+                  <Money cents={o.account.overdraft_used_cents ?? 0} /> usados de <Money cents={o.account.overdraft_limit_cents} />
                 </dd>
               </div>
             ) : null}

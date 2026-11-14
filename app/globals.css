@@ -89,6 +89,14 @@ body { background: var(--background); color: var(--foreground); font-family: var
 
 @layer components {
   .tabular { font-variant-numeric: tabular-nums; }
+  /* "Esconder valores" (components/app/money.tsx): the toggle sets data-hide-values on <html>. */
+  .money { white-space: nowrap; }
+  .money-mask { display: none; }
+  [data-hide-values] .money-value { display: none; }
+  [data-hide-values] .money-mask { display: inline; }
+  /* Charts keep their shape but lose the numbers on the axis and in the tooltip. */
+  [data-hide-values] .money-chart .recharts-yAxis-tick-labels,
+  [data-hide-values] .money-chart .recharts-tooltip-wrapper { visibility: hidden; }
   /* Rótulo · 12/16 · Mono, uppercase. */
   .label-mono {
     font-family: var(--font-mono);

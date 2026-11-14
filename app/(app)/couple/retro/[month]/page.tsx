@@ -6,11 +6,11 @@ import { PageHeader } from "@/components/app/bits";
 import { Avatar, PERSON_BG, SegmentBar } from "@/components/app/couple";
 import { Card } from "@/components/ui/card";
 import { SubmitButton } from "@/components/ui/form";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { getHousehold } from "@/lib/application/household";
 import { loadRetro } from "@/lib/application/retro";
 import { addMonths, isMonthKey, todayIn } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 
 export const metadata = { title: "Retrospectiva · Prumo" };
 
@@ -50,7 +50,7 @@ export default async function RetroPage({ params }: { params: Promise<{ month: s
 
       <Card className="grid gap-2">
         <p className="text-sm text-muted-foreground">Em {name}, vocês gastaram juntos</p>
-        <p className="tabular text-[36px] font-medium tracking-[-0.03em]">{formatBRL(retro.totalCents)}</p>
+        <p className="tabular text-[36px] font-medium tracking-[-0.03em]"><Money cents={retro.totalCents} /></p>
         <p className="text-sm text-muted-foreground">Isso é tudo o que estava marcado como Nosso.</p>
         {retro.changePercent !== null ? (
           <>
@@ -60,19 +60,19 @@ export default async function RetroPage({ params }: { params: Promise<{ month: s
                 <div key={label as string} className="grid grid-cols-[80px_1fr_auto] items-center gap-2">
                   <span className="capitalize text-muted-foreground">{label}</span>
                   <div className="h-2 rounded-full bg-border"><div className="h-2 rounded-full bg-primary" style={{ width: `${((cents as number) / maxBar) * 100}%` }} /></div>
-                  <span className="tabular">{formatBRL(cents as number)}</span>
+                  <span className="tabular"><Money cents={cents as number} /></span>
                 </div>
               ))}
             </div>
           </>
         ) : null}
-        {retro.biggestDrop && retro.biggestDrop.cents >= 5000 ? <p className="text-sm text-muted-foreground">A maior queda foi em {retro.biggestDrop.category.toLowerCase()}: {formatBRL(retro.biggestDrop.cents)} a menos.</p> : null}
+        {retro.biggestDrop && retro.biggestDrop.cents >= 5000 ? <p className="text-sm text-muted-foreground">A maior queda foi em {retro.biggestDrop.category.toLowerCase()}: <Money cents={retro.biggestDrop.cents} /> a menos.</p> : null}
       </Card>
 
       {retro.budgetLines.length > 0 ? (
         <Card className="grid gap-2">
           <p className="text-[15px] font-medium">{over.length === 0 ? "Tudo dentro do combinado" : over.length === 1 ? "Uma categoria passou do combinado" : `${over.length} categorias passaram do combinado`}</p>
-          {over.map((l) => <div key={l.category} className="flex justify-between text-sm"><span>{l.category}</span><span className="tabular text-danger">{formatBRL(l.spentCents)} de {formatBRL(l.limitCents)}</span></div>)}
+          {over.map((l) => <div key={l.category} className="flex justify-between text-sm"><span>{l.category}</span><span className="tabular text-danger"><Money cents={l.spentCents} /> de <Money cents={l.limitCents} /></span></div>)}
           {attention.map((l) => <div key={l.category} className="flex justify-between text-sm"><span>{l.category}</span><span className="tabular">{l.percent}% do orçamento</span></div>)}
           {okCount > 0 ? <div className="flex justify-between text-sm text-muted-foreground"><span>{over.length + attention.length > 0 ? `As outras ${okCount}` : `Todas as ${okCount}`}</span><span>dentro do combinado</span></div> : null}
         </Card>
@@ -81,8 +81,8 @@ export default async function RetroPage({ params }: { params: Promise<{ month: s
       {retro.goalLines.length > 0 ? (
         <Card className="grid gap-2">
           <p className="text-sm text-muted-foreground">Nas metas, vocês guardaram</p>
-          <p className="tabular text-2xl font-medium text-success">+ {formatBRL(retro.goalsSavedCents)}</p>
-          {retro.goalLines.map((g) => <div key={g.id} className="flex justify-between text-sm"><span>{g.name}</span><span className="tabular">+ {formatBRL(g.savedCents)} · {g.percent}%</span></div>)}
+          <p className="tabular text-2xl font-medium text-success">+ <Money cents={retro.goalsSavedCents} /></p>
+          {retro.goalLines.map((g) => <div key={g.id} className="flex justify-between text-sm"><span>{g.name}</span><span className="tabular">+ <Money cents={g.savedCents} /> · {g.percent}%</span></div>)}
         </Card>
       ) : null}
 
@@ -92,7 +92,7 @@ export default async function RetroPage({ params }: { params: Promise<{ month: s
           <SegmentBar total={total} label="Quem pagou o que é Nosso" segments={[{ value: paidBy(0), color: PERSON_BG[people[0].color] }, { value: paidBy(1), color: PERSON_BG[people[1].color] }]} />
           <div className="grid grid-cols-2 gap-2 text-sm">
             {people.map((p, i) => (
-              <span key={p.userId} className="flex items-center gap-2"><Avatar person={p} size={24} /><span><span className="block">{p.name} · {Math.round(share(i as 0 | 1) * 100)}%</span><span className="tabular block text-muted-foreground">{formatBRL(paidBy(i as 0 | 1))}</span></span></span>
+              <span key={p.userId} className="flex items-center gap-2"><Avatar person={p} size={24} /><span><span className="block">{p.name} · {Math.round(share(i as 0 | 1) * 100)}%</span><span className="tabular block text-muted-foreground"><Money cents={paidBy(i as 0 | 1)} /></span></span></span>
             ))}
           </div>
           <p className="text-sm text-muted-foreground">
@@ -106,7 +106,7 @@ export default async function RetroPage({ params }: { params: Promise<{ month: s
           <p className="text-[15px] font-medium">Acerto do mês</p>
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2"><Avatar person={debtor} size={28} /> → <Avatar person={creditor} size={28} /></span>
-            <span className="tabular text-xl font-medium">{formatBRL(Math.abs(owed))}</span>
+            <span className="tabular text-xl font-medium"><Money cents={Math.abs(owed)} /></span>
           </div>
           {retro.monthSettled ? (
             <p className="text-sm text-muted-foreground">Acertado em {dayMonth.format(new Date(retro.monthSettled.settled_at))}</p>

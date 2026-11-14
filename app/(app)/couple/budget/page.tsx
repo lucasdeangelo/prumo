@@ -6,12 +6,12 @@ import { toggleBudgetAlertsAction } from "@/app/(app)/couple/plan-actions";
 import { PageHeader } from "@/components/app/bits";
 import { BudgetBar, SpaceChip, UpdatedAt } from "@/components/app/couple";
 import { Card, EmptyState } from "@/components/ui/card";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { budgetOverview, loadCoupleContext } from "@/lib/application/couple-data";
 import { listProposals } from "@/lib/application/household";
 import { daysLeftInMonth } from "@/lib/domain/couple";
 import { formatMonthLong, todayIn } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cn } from "@/lib/utils";
 
@@ -57,7 +57,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
         <Card className="grid gap-2">
           <p className="text-[15px] font-medium">{proposal.proposed_by === user.id ? `Aguardando ${household.partner.name} confirmar o novo orçamento` : `${household.partner.name} propôs um novo orçamento`}</p>
           <ul className="grid gap-1 text-sm text-muted-foreground">
-            {((proposal.payload.lines as Array<{ category: string; amountCents: number }>) ?? []).map((l) => <li key={l.category} className="flex justify-between"><span>{l.category}</span><span className="tabular">{formatBRL(l.amountCents)}</span></li>)}
+            {((proposal.payload.lines as Array<{ category: string; amountCents: number }>) ?? []).map((l) => <li key={l.category} className="flex justify-between"><span>{l.category}</span><span className="tabular"><Money cents={l.amountCents} /></span></li>)}
           </ul>
           {proposal.proposed_by !== user.id ? (
             <form action={decideProposalAction} className="grid grid-cols-2 gap-2">
@@ -78,10 +78,10 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
         <>
           <Card className="grid gap-1">
             <span className="label-mono">Ainda cabe no mês</span>
-            <span className={cn("tabular text-[32px] font-medium tracking-[-0.03em]", overview.freeCents < 0 && "text-danger")}>{formatBRL(overview.freeCents)}</span>
+            <span className={cn("tabular text-[32px] font-medium tracking-[-0.03em]", overview.freeCents < 0 && "text-danger")}><Money cents={overview.freeCents} /></span>
             <span className="text-[13px] text-muted-foreground">
-              {formatBRL(overview.usedCents)} de {formatBRL(overview.limitCents)}
-              {overview.freeCents > 0 ? ` · cerca de ${formatBRL(Math.floor(overview.freeCents / days / 100) * 100)} por dia` : ""}
+              <Money cents={overview.usedCents} /> de <Money cents={overview.limitCents} />
+              {overview.freeCents > 0 ? <> · cerca de <Money cents={Math.floor(overview.freeCents / days / 100) * 100} /> por dia</> : ""}
             </span>
           </Card>
 
@@ -100,11 +100,11 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
               <li key={line.category} className="grid gap-2 rounded-2xl border border-border bg-card p-4">
                 <div className="flex items-center justify-between text-[15px]">
                   <span className="font-medium">{line.category}</span>
-                  <span className="tabular text-muted-foreground">{formatBRL(line.spentCents)} de {formatBRL(line.limitCents)}</span>
+                  <span className="tabular text-muted-foreground"><Money cents={line.spentCents} /> de <Money cents={line.limitCents} /></span>
                 </div>
                 <BudgetBar spentCents={line.spentCents} limitCents={line.limitCents} />
                 <span className={cn("text-[13px]", line.state === "over" ? "font-medium text-danger" : "text-muted-foreground")}>
-                  {line.state === "over" ? `Passou ${formatBRL(-line.remainingCents)} do combinado` : line.state === "attention" ? `${line.percent}% · restam ${formatBRL(line.remainingCents)}` : `Restam ${formatBRL(line.remainingCents)}`}
+                  {line.state === "over" ? <>Passou <Money cents={-line.remainingCents} /> do combinado</> : line.state === "attention" ? <>{line.percent}% · restam <Money cents={line.remainingCents} /></> : <>Restam <Money cents={line.remainingCents} /></>}
                 </span>
               </li>
             ))}

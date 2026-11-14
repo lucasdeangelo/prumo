@@ -2,12 +2,13 @@ import Link from "next/link";
 
 import { Amount, PageHeader, SectionHeader } from "@/components/app/bits";
 import { Avatar, InstitutionMark, SegmentBar, UpdatedAt } from "@/components/app/couple";
+import { HideValuesToggle } from "@/components/app/hide-values";
 import { Card, EmptyState } from "@/components/ui/card";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { householdCards, loadInvoice } from "@/lib/application/cards";
 import { lastSyncAt } from "@/lib/application/couple-data";
 import { formatDayLabel, formatDayShort, formatMonthLong } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 import { transactionLabel } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -82,18 +83,18 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="grid gap-4">
-      <PageHeader title="Cartões" subtitle={partner ? "Nosso · cartões compartilhados" : undefined} />
+      <PageHeader title="Cartões" subtitle={partner ? "Nosso · cartões compartilhados" : undefined} action={<HideValuesToggle className="-mr-3" />} />
       <UpdatedAt at={syncedAt} />
 
       <div className="grid grid-cols-2 gap-3">
         <Card className="grid gap-1 p-4">
           <span className="text-[13px] text-muted-foreground">Faturas abertas</span>
-          <span className="tabular text-lg font-medium">{formatBRL(openTotal)}</span>
+          <span className="tabular text-lg font-medium"><Money cents={openTotal} /></span>
         </Card>
         <Card className="grid gap-1 p-4">
           <span className="text-[13px] text-muted-foreground">Limite disponível</span>
-          <span className="tabular text-lg font-medium">{limit ? formatBRL(available) : "—"}</span>
-          {limit ? <span className="text-xs text-muted-foreground">de {formatBRL(limit)}</span> : null}
+          <span className="tabular text-lg font-medium">{limit ? <Money cents={available} /> : "—"}</span>
+          {limit ? <span className="text-xs text-muted-foreground">de <Money cents={limit} /></span> : null}
         </Card>
       </div>
 
@@ -137,17 +138,17 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
           <span className="text-[15px] font-medium">Fatura de {monthOnly.format(new Date(`${selected.period.month}-01T00:00:00Z`))}</span>
           <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", status === "open" ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground")}>{status === "open" ? "Aberta" : status === "future" ? "Próxima" : "Fechada"}</span>
         </div>
-        <span className="tabular text-[32px] font-medium tracking-[-0.03em]">{formatBRL(amountOf(selected))}</span>
+        <span className="tabular text-[32px] font-medium tracking-[-0.03em]"><Money cents={amountOf(selected)} /></span>
         {Math.abs(selected.carriedCents) >= 100 || selected.paymentsCents > 0 ? (
           <dl className="grid gap-1 text-[13px]">
             {Math.abs(selected.carriedCents) >= 100 ? (
               <>
-                <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Compras, parcelas e encargos</dt><dd className="tabular">{formatBRL(purchasesCents)}</dd></div>
-                <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{status === "open" ? "Não pago da fatura anterior" : "Saldo anterior e ajustes do banco"}</dt><dd className="tabular">{formatBRL(selected.carriedCents)}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Compras, parcelas e encargos</dt><dd className="tabular"><Money cents={purchasesCents} /></dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-muted-foreground">{status === "open" ? "Não pago da fatura anterior" : "Saldo anterior e ajustes do banco"}</dt><dd className="tabular"><Money cents={selected.carriedCents} /></dd></div>
               </>
             ) : null}
             {selected.paymentsCents > 0 ? (
-              <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Pagamentos lançados nesta fatura</dt><dd className="tabular">{formatBRL(selected.paymentsCents)}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Pagamentos lançados nesta fatura</dt><dd className="tabular"><Money cents={selected.paymentsCents} /></dd></div>
             ) : null}
           </dl>
         ) : null}
@@ -160,7 +161,7 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
         {usedRatio !== null ? (
           <div className="grid gap-1.5">
             <SegmentBar segments={[{ value: usedRatio * 100, color: "var(--primary)" }]} total={100} label={`Limite usado ${Math.round(usedRatio * 100)}%`} />
-            <div className="flex justify-between text-[13px] text-muted-foreground"><span>Limite usado {Math.round(usedRatio * 100)}%</span><span>Disponível {formatBRL(card.available_limit_cents ?? 0)}</span></div>
+            <div className="flex justify-between text-[13px] text-muted-foreground"><span>Limite usado {Math.round(usedRatio * 100)}%</span><span>Disponível <Money cents={card.available_limit_cents ?? 0} /></span></div>
           </div>
         ) : null}
         <div className="grid grid-cols-2 gap-2">
@@ -184,7 +185,7 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
                   <span className="block truncate text-[15px] line-through">{item.description}</span>
                   <span className="block text-[13px]">Compra estornada · o banco ainda lista esta parcela, mas ela não entra no total</span>
                 </span>
-                <span className="tabular text-[15px] line-through">{formatBRL(item.amount_cents)}</span>
+                <span className="tabular text-[15px] line-through"><Money cents={item.amount_cents} /></span>
               </li>
             ))}
           </ul>

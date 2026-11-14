@@ -4,6 +4,7 @@ import { finishRetroAction, markRetroPointAction } from "@/app/(app)/couple/plan
 import { PageHeader } from "@/components/app/bits";
 import { ShareImageButton } from "@/components/app/share-image";
 import { Card, EmptyState } from "@/components/ui/card";
+import { MaskedText } from "@/components/app/money";
 import { SubmitButton } from "@/components/ui/form";
 import { requireUser } from "@/lib/auth/session";
 import { getHousehold } from "@/lib/application/household";
@@ -42,8 +43,8 @@ export default async function TalkPage({ params }: { params: Promise<{ month: st
           const done = retro.marked.has(point.key);
           return (
             <Card key={point.key} className="grid gap-2">
-              <p className="text-[15px] font-medium">{point.title}</p>
-              <p className="text-sm text-muted-foreground">{point.body}</p>
+              <p className="text-[15px] font-medium"><MaskedText>{point.title}</MaskedText></p>
+              <p className="text-sm text-muted-foreground"><MaskedText>{point.body}</MaskedText></p>
               {done ? (
                 <span className="w-fit rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground">Conversamos</span>
               ) : (

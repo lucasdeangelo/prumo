@@ -6,10 +6,11 @@ import { ApprovalCard } from "@/components/app/approval-card";
 import { SpaceChip, type Person } from "@/components/app/couple";
 import { ThresholdForm } from "@/components/app/plan-forms";
 import { Card, EmptyState } from "@/components/ui/card";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { getHousehold, listProposals } from "@/lib/application/household";
 import { listApprovals } from "@/lib/application/plans";
-import { centsToInput, formatBRL } from "@/lib/domain/money";
+import { centsToInput } from "@/lib/domain/money";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +48,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
       <Card className="grid gap-3">
         {household.approvalThresholdCents ? (
           <div>
-            <p className="text-[15px] font-medium">Compras do Nosso acima de {formatBRL(household.approvalThresholdCents)}</p>
+            <p className="text-[15px] font-medium">Compras do Nosso acima de <Money cents={household.approvalThresholdCents} /></p>
             <p className="text-sm text-muted-foreground">a gente conversa antes</p>
             {decided?.decided_at ? <p className="mt-1 text-[13px] text-muted-foreground">Combinado por {names} em {since.format(new Date(decided.decided_at))}</p> : null}
           </div>
@@ -56,7 +57,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
         )}
         {thresholdProposal ? (
           <p className="rounded-[10px] bg-muted px-3 py-2 text-[13px] text-muted-foreground">
-            {thresholdProposal.proposed_by === user.id ? `Aguardando ${household.partner.name} confirmar` : `${household.partner.name} propôs`} {thresholdProposal.payload.amountCents ? formatBRL(thresholdProposal.payload.amountCents as number) : "sem limite"}. {thresholdProposal.proposed_by !== user.id ? <Link href="/couple">Responder</Link> : null}
+            {thresholdProposal.proposed_by === user.id ? `Aguardando ${household.partner.name} confirmar` : `${household.partner.name} propôs`} {thresholdProposal.payload.amountCents ? <Money cents={thresholdProposal.payload.amountCents as number} /> : "sem limite"}. {thresholdProposal.proposed_by !== user.id ? <Link href="/couple">Responder</Link> : null}
           </p>
         ) : null}
         <details>

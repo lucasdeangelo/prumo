@@ -5,12 +5,12 @@ import { Amount, PageHeader } from "@/components/app/bits";
 import { InstitutionMark, UpdatedAt, VisibilityBadge } from "@/components/app/couple";
 import { SyncButton } from "@/components/app/forms";
 import { Card } from "@/components/ui/card";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { listConnections } from "@/lib/application/connections";
 import { loadCategoryNames, loadFacts } from "@/lib/application/couple-data";
 import { getHousehold } from "@/lib/application/household";
 import { addDays, formatDayShort, todayIn } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 import { transactionLabel } from "@/lib/types";
 
 export const metadata = { title: "Conexão · Prumo" };
@@ -58,7 +58,7 @@ export default async function ConnectionPage({ params }: { params: Promise<{ ite
         {main ? (
           <Card className="grid gap-2">
             <p className="label-mono">Saldo em {dataUntil}</p>
-            <p className="tabular text-2xl font-medium">{main.balance_cents !== null ? formatBRL(Math.abs(main.balance_cents)) : "—"}</p>
+            <p className="tabular text-2xl font-medium">{main.balance_cents !== null ? <Money cents={Math.abs(main.balance_cents)} /> : "—"}</p>
             {partnerName ? <VisibilityBadge kind={main.visibility} /> : null}
             <UpdatedAt at={c.lastSuccessAt} state="expired" />
           </Card>

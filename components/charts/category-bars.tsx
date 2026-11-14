@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { TagDot } from "@/components/app/bits";
-import { formatBRL } from "@/lib/domain/money";
+import { Money } from "@/components/app/money";
 
 export type CategoryRow = { tagId: string | null; name: string; color: string | null; cents: number; href?: string };
 
@@ -24,10 +24,10 @@ export function CategoryBars({ rows, totalCents, limit = 6 }: { rows: CategoryRo
             <div className="mb-1 flex items-center gap-2 text-sm">
               <TagDot color={row.color} />
               <span className="min-w-0 flex-1 truncate">{row.name}</span>
-              <span className="tabular font-medium">{formatBRL(row.cents)}</span>
+              <span className="tabular font-medium"><Money cents={row.cents} /></span>
               <span className="tabular w-9 text-right text-xs text-muted-foreground">{share}%</span>
             </div>
-            <div className="h-2 rounded-full bg-muted" title={`${row.name}: ${formatBRL(row.cents)}`}>
+            <div className="h-2 rounded-full bg-muted" title={row.name}>
               <div className="h-2 rounded-full" style={{ width: `${Math.max(2, (row.cents / max) * 100)}%`, background: "var(--series-expense)" }} />
             </div>
           </>

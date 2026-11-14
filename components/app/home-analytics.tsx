@@ -6,9 +6,9 @@ import { TransactionList } from "@/components/app/transaction-list";
 import { CategoryBars } from "@/components/charts/category-bars";
 import { IncomeExpenseBars } from "@/components/charts/income-expense-bars";
 import { Card, CardTitle, EmptyState } from "@/components/ui/card";
+import { Money } from "@/components/app/money";
 import { addDays, formatDayShort, formatMonthShort, lastMonths, monthBounds } from "@/lib/domain/dates";
 import { buildForecast, forecastTotals } from "@/lib/domain/forecast";
-import { formatBRL } from "@/lib/domain/money";
 import { monthlyEquivalentCents } from "@/lib/domain/recurrence";
 import { monthlySeries, summarizeMonth } from "@/lib/domain/summary";
 import type { Subscription, Tag, Transaction, UpcomingBill } from "@/lib/types";
@@ -21,7 +21,7 @@ export function BalanceCard({ balanceCents, hasBalance }: { balanceCents: number
       <p className="tabular text-[40px] font-medium leading-[1.05] tracking-[-0.03em]">
         {hasBalance ? (
           <>
-            <span className="tabular font-medium text-white">{formatBRL(balanceCents)}</span>
+            <span className="tabular font-medium text-white"><Money cents={balanceCents} /></span>
             {balanceCents < 0 ? " · usando o cheque especial" : ""}
           </>
         ) : (
@@ -92,7 +92,7 @@ export function HomeAnalytics({
       {overdue.length > 0 ? (
         <Link href="/upcoming" className="flex min-h-12 items-center gap-3 rounded-2xl bg-danger-bg px-4 py-3 text-sm font-medium text-danger hover:text-danger">
           <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-danger" />
-          <span className="flex-1">{overdue.length === 1 ? "1 conta vencida" : `${overdue.length} contas vencidas`}: {formatBRL(forecastTotals(overdue).outCents)}</span>
+          <span className="flex-1">{overdue.length === 1 ? "1 conta vencida" : `${overdue.length} contas vencidas`}: <Money cents={forecastTotals(overdue).outCents} /></span>
           <ChevronRightIcon className="size-4" strokeWidth={1.8} />
         </Link>
       ) : null}
@@ -132,7 +132,7 @@ export function HomeAnalytics({
         ) : (
           <EmptyState title="Nada previsto"><Link href="/upcoming/new">Cadastre uma conta futura</Link>.</EmptyState>
         )}
-        {monthlySubs > 0 ? <p className="mt-3 text-xs text-muted-foreground">Assinaturas ativas custam {formatBRL(monthlySubs)} por mês.</p> : null}
+        {monthlySubs > 0 ? <p className="mt-3 text-xs text-muted-foreground">Assinaturas ativas custam <Money cents={monthlySubs} /> por mês.</p> : null}
       </Card>
 
       <section className="grid gap-2">

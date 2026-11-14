@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 
 import { batchOwnerAction, type CardsState } from "@/app/(app)/cards/actions";
 import { FormMessage, SubmitButton } from "@/components/ui/form";
-import { formatBRL } from "@/lib/domain/money";
+import { Money } from "@/components/app/money";
 import { cn } from "@/lib/utils";
 
 type Item = { id: string; label: string; detail: string; amountCents: number; category: string };
@@ -50,14 +50,14 @@ export function BatchForm({ items, holder, other, incomeShare, returnTo }: { ite
                 <span className="block truncate text-[15px] font-medium">{item.label}</span>
                 <span className="block text-[13px] text-muted-foreground">{item.detail}</span>
               </span>
-              <span className="tabular text-[15px] font-medium">{formatBRL(item.amountCents)}</span>
+              <span className="tabular text-[15px] font-medium"><Money cents={item.amountCents} /></span>
             </label>
           </li>
         ))}
       </ul>
 
       <div className="grid gap-3 rounded-2xl border border-border bg-card p-4">
-        <div className="flex items-center justify-between"><span className="text-[15px] font-medium">Marcar {selected.size} {selected.size === 1 ? "compra" : "compras"} como</span><span className="tabular text-sm font-medium">{formatBRL(total)}</span></div>
+        <div className="flex items-center justify-between"><span className="text-[15px] font-medium">Marcar {selected.size} {selected.size === 1 ? "compra" : "compras"} como</span><span className="tabular text-sm font-medium"><Money cents={total} /></span></div>
         <div className="grid grid-cols-3 gap-1 rounded-full bg-muted p-1" role="radiogroup" aria-label="De quem é">
           {([["ours", "Nosso"], ["holder", `De ${holder}`], ["partner", `De ${other}`]] as const).map(([value, label]) => (
             <label key={value} className="relative">
@@ -71,7 +71,7 @@ export function BatchForm({ items, holder, other, incomeShare, returnTo }: { ite
             <p className="text-sm font-medium">Como dividir</p>
             <div className="grid gap-2">
               {([
-                ["equal", "50/50", `${formatBRL(Math.round(total / 2))} cada`],
+                ["equal", "50/50", <><Money cents={Math.round(total / 2)} /> cada</>],
                 ["income", "Pela renda", `${Math.round(incomeShare * 100)}% · ${100 - Math.round(incomeShare * 100)}%`],
                 ["fixed", "Valor fixo", "definir"],
               ] as const).map(([value, label, hint]) => (
@@ -89,7 +89,7 @@ export function BatchForm({ items, holder, other, incomeShare, returnTo }: { ite
               </label>
             ) : null}
             <p className="text-[13px] text-muted-foreground">
-              {holder} {formatBRL(first)} · {other} {formatBRL(total - first)}.{method === "income" ? " A proporção vem das rendas que vocês informaram." : ""}
+              {holder} <Money cents={first} /> · {other} <Money cents={total - first} />.{method === "income" ? " A proporção vem das rendas que vocês informaram." : ""}
             </p>
             {oneCategory ? (
               <label className="flex items-start gap-3 text-sm">

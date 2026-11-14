@@ -3,8 +3,8 @@ import Link from "next/link";
 import { clearSurpriseAction, txPrivacyAction } from "@/app/(app)/couple-actions";
 import { SpaceChip, VisibilityBadge } from "@/components/app/couple";
 import { Card, CardTitle } from "@/components/ui/card";
+import { Money } from "@/components/app/money";
 import { formatDayShort } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 import { cn } from "@/lib/utils";
 
 type Tx = {
@@ -23,7 +23,7 @@ const ACCOUNT_DEFAULT: Record<string, string> = {
   details: "padrão da conta",
 };
 
-function Choice({ tx, field, value, active, title, body, returnTo }: { tx: Tx; field: string; value: string; active: boolean; title: string; body?: string; returnTo: string }) {
+function Choice({ tx, field, value, active, title, body, returnTo }: { tx: Tx; field: string; value: string; active: boolean; title: string; body?: React.ReactNode; returnTo: string }) {
   return (
     <form action={txPrivacyAction}>
       <input type="hidden" name="id" value={tx.id} />
@@ -87,7 +87,7 @@ export function TxPrivacySection({ tx, partnerName, accountVisibility, tagName, 
         <Card className="grid gap-3">
           <CardTitle>O que {partnerName} vê</CardTitle>
           <Choice tx={tx} field="privacy" value="account" active={tx.privacy === "account" && !tx.free_money} returnTo={returnTo} title="Tudo" body={`Loja, categoria, valor e data. ${accountVisibility ? ACCOUNT_DEFAULT[accountVisibility].charAt(0).toUpperCase() + ACCOUNT_DEFAULT[accountVisibility].slice(1) : "Padrão da conta"}.`} />
-          <Choice tx={tx} field="privacy" value="category_only" active={tx.privacy === "category_only"} returnTo={returnTo} title="Só categoria e valor" body={`${partnerName} vê “${tagName ?? "Outros"} · ${formatBRL(tx.amount_cents)}”, sem o nome da loja.`} />
+          <Choice tx={tx} field="privacy" value="category_only" active={tx.privacy === "category_only"} returnTo={returnTo} title="Só categoria e valor" body={<>{partnerName} vê “{tagName ?? "Outros"} · <Money cents={tx.amount_cents} />”, sem o nome da loja.</>} />
           <Choice tx={tx} field="privacy" value="hidden" active={tx.privacy === "hidden"} returnTo={returnTo} title={`Ocultar de ${partnerName}`} body="Não aparece para ele. O saldo da conta continua o mesmo." />
           {tx.type === "debit" ? (
             <form action={txPrivacyAction}>

@@ -7,11 +7,11 @@ import { CopyButton } from "@/components/app/copy-button";
 import { Avatar, SpaceChip } from "@/components/app/couple";
 import { Card } from "@/components/ui/card";
 import { SubmitButton } from "@/components/ui/form";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { householdCards, loadInvoice } from "@/lib/application/cards";
 import { sharePercentLabel } from "@/lib/domain/couple";
 import { formatDayLabel } from "@/lib/domain/dates";
-import { formatBRL } from "@/lib/domain/money";
 import { buildPixPayload, maskPixKey } from "@/lib/domain/pix";
 
 export const metadata = { title: "Acerto da fatura · Prumo" };
@@ -52,15 +52,15 @@ export default async function SettlePage({ params, searchParams }: { params: Pro
           <span aria-hidden="true" className="text-muted-foreground">→</span>
           <Avatar person={holder} size={36} />
         </div>
-        <p className="tabular text-[36px] font-medium tracking-[-0.03em]">{formatBRL(amount)}</p>
+        <p className="tabular text-[36px] font-medium tracking-[-0.03em]"><Money cents={amount} /></p>
         <p className="text-sm text-muted-foreground">Até {formatDayLabel(invoice.period.due)} — dia do vencimento</p>
       </Card>
 
       <Card className="grid gap-2 text-sm">
-        <div className="flex justify-between"><span>{holder.name} paga a fatura inteira</span><span className="tabular">{formatBRL(Math.max(0, invoice.totalCents))}</span></div>
-        <div className="flex justify-between"><span>Parte de {other.name} no que é Nosso{shares.length === 1 ? ` (${shares[0]})` : ""}</span><span className="tabular">{formatBRL(invoice.settlement.partnerShareOfOursCents)}</span></div>
-        <div className="flex justify-between"><span>Compras de {other.name}{card.partner_card_last4 ? " no adicional" : ""}</span><span className="tabular">{formatBRL(invoice.holderTotals.partner)}</span></div>
-        <div className="flex justify-between border-t border-border pt-2 font-medium"><span>{other.name} transfere</span><span className="tabular">{formatBRL(amount)}</span></div>
+        <div className="flex justify-between"><span>{holder.name} paga a fatura inteira</span><span className="tabular"><Money cents={Math.max(0, invoice.totalCents)} /></span></div>
+        <div className="flex justify-between"><span>Parte de {other.name} no que é Nosso{shares.length === 1 ? ` (${shares[0]})` : ""}</span><span className="tabular"><Money cents={invoice.settlement.partnerShareOfOursCents} /></span></div>
+        <div className="flex justify-between"><span>Compras de {other.name}{card.partner_card_last4 ? " no adicional" : ""}</span><span className="tabular"><Money cents={invoice.holderTotals.partner} /></span></div>
+        <div className="flex justify-between border-t border-border pt-2 font-medium"><span>{other.name} transfere</span><span className="tabular"><Money cents={amount} /></span></div>
       </Card>
 
       {amount > 0 ? (

@@ -6,11 +6,12 @@ import { Avatar, PERSON_BG, SegmentBar } from "@/components/app/couple";
 import { ContributeForm } from "@/components/app/plan-forms";
 import { Card } from "@/components/ui/card";
 import { SubmitButton } from "@/components/ui/form";
+import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
 import { goalsOverview } from "@/lib/application/couple-data";
 import { getHousehold } from "@/lib/application/household";
 import { todayIn } from "@/lib/domain/dates";
-import { centsToInput, formatBRL } from "@/lib/domain/money";
+import { centsToInput } from "@/lib/domain/money";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = { title: "Meta · Prumo" };
@@ -38,8 +39,8 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
   const plan = (userId: string) => {
     const member = goal.members.find((m) => m.user_id === userId);
     if (!member) return "";
-    if (member.monthly_cents) return ` · ${formatBRL(member.monthly_cents)}/mês`;
-    if (member.percent !== null && goal.progress.neededMonthlyCents) return ` · ${formatBRL(Math.round((goal.progress.neededMonthlyCents * Number(member.percent)) / 100))}/mês`;
+    if (member.monthly_cents) return <> · <Money cents={member.monthly_cents} />/mês</>;
+    if (member.percent !== null && goal.progress.neededMonthlyCents) return <> · <Money cents={Math.round((goal.progress.neededMonthlyCents * Number(member.percent)) / 100)} />/mês</>;
     return "";
   };
   const timeline = [
@@ -56,7 +57,7 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
         <Card className="grid gap-2">
           <p className="text-[15px] font-medium">Confirme sua parte</p>
           <p className="text-sm text-muted-foreground">
-            {myMember?.percent !== null && myMember?.percent !== undefined ? `${Number(myMember.percent)}% do que for guardado` : `${formatBRL(myMember?.monthly_cents ?? 0)} por mês`}. A meta começa quando os dois confirmarem.
+            {myMember?.percent !== null && myMember?.percent !== undefined ? `${Number(myMember.percent)}% do que for guardado` : <><Money cents={myMember?.monthly_cents ?? 0} /> por mês</>}. A meta começa quando os dois confirmarem.
           </p>
           <form action={confirmGoalAction}>
             <input type="hidden" name="id" value={goal.id} />
@@ -69,8 +70,8 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
 
       <Card className="grid gap-3">
         <div className="flex items-end justify-between">
-          <span className="tabular text-[32px] font-medium tracking-[-0.03em]">{formatBRL(goal.savedCents)}</span>
-          <span className="text-sm text-muted-foreground">de {formatBRL(goal.targetCents)}</span>
+          <span className="tabular text-[32px] font-medium tracking-[-0.03em]"><Money cents={goal.savedCents} /></span>
+          <span className="text-sm text-muted-foreground">de <Money cents={goal.targetCents} /></span>
         </div>
         <SegmentBar total={goal.targetCents} label={`${goal.progress.percent}% guardado`} segments={people.map((p) => ({ value: goal.byUser[p.userId] ?? 0, color: PERSON_BG[p.color] }))} />
         <div className="flex justify-between text-[12px] text-muted-foreground">{[25, 50, 75, 100].map((p) => <span key={p} className={goal.progress.percent >= p ? "font-medium text-foreground" : ""}>{p}%</span>)}</div>
@@ -81,7 +82,7 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
                 <Avatar person={p} size={28} />
                 <span className="min-w-0">
                   <span className="block text-[13px] text-muted-foreground">{p.name}{plan(p.userId)}</span>
-                  <span className="tabular block text-[15px] font-medium">{formatBRL(goal.byUser[p.userId] ?? 0)}</span>
+                  <span className="tabular block text-[15px] font-medium"><Money cents={goal.byUser[p.userId] ?? 0} /></span>
                 </span>
               </div>
             ))}
@@ -94,10 +95,10 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
           <p className="text-[15px] font-medium">No ritmo atual, {people.length > 1 ? "vocês chegam" : "você chega"} lá em {monthYear.format(new Date(`${goal.progress.reachMonth}-01T00:00:00Z`))}</p>
           <p className="text-sm">
             {goal.progress.monthsAhead !== null && goal.progress.monthsAhead > 0
-              ? `${goal.progress.monthsAhead === 1 ? "Um mês" : `${goal.progress.monthsAhead} meses`} antes do prazo, guardando ${formatBRL(goal.monthlyPaceCents)} por mês${people.length > 1 ? " juntos" : ""}.`
+              ? <>{goal.progress.monthsAhead === 1 ? "Um mês" : `${goal.progress.monthsAhead} meses`} antes do prazo, guardando <Money cents={goal.monthlyPaceCents} /> por mês{people.length > 1 ? " juntos" : ""}.</>
               : goal.progress.extraMonthlyCents > 0
-                ? `Para chegar no prazo, faltam ${formatBRL(goal.progress.extraMonthlyCents)} por mês a mais.`
-                : `Guardando ${formatBRL(goal.monthlyPaceCents)} por mês.`}
+                ? <>Para chegar no prazo, faltam <Money cents={goal.progress.extraMonthlyCents} /> por mês a mais.</>
+                : <>Guardando <Money cents={goal.monthlyPaceCents} /> por mês.</>}
           </p>
         </Card>
       ) : null}
@@ -126,7 +127,7 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
                     <span className="block text-[15px] font-medium">{byId.get(item.userId)?.name ?? "Alguém"} guardou</span>
                     <span className="block text-[13px] capitalize text-muted-foreground">{dayLong.format(new Date(`${item.date}T00:00:00Z`))}{item.automatic ? " · automático" : ""}</span>
                   </span>
-                  <span className="tabular text-[15px] font-medium text-success">+ {formatBRL(item.cents)}</span>
+                  <span className="tabular text-[15px] font-medium text-success">+ <Money cents={item.cents} /></span>
                 </li>
               ),
             )}
