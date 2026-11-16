@@ -7,7 +7,9 @@ import { SyncButton } from "@/components/app/forms";
 import { Card } from "@/components/ui/card";
 import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
+import { investmentPreferenceAction } from "@/app/(app)/investments/actions";
 import { listConnections } from "@/lib/application/connections";
+import { loadConnectionInvestments } from "@/lib/application/investments";
 import { loadCategoryNames, loadFacts } from "@/lib/application/couple-data";
 import { getHousehold } from "@/lib/application/household";
 import { addDays, formatDayShort, todayIn } from "@/lib/domain/dates";
@@ -121,6 +123,7 @@ export default async function ConnectionPage({ params }: { params: Promise<{ ite
         <p className="text-sm text-muted-foreground">O MeuPluggy busca os dados do banco uma vez por dia. Se uma falha se repetir por 3 dias, avisamos para você conferir a conexão no MeuPluggy. O botão abaixo só traz o que o MeuPluggy já tem.</p>
       </Card>
       <SyncButton itemId={itemId} />
+      <ConnectionInvestments userId={user.id} itemRowIds={group.map((g) => g.id)} itemId={itemId} />
       <Card className="grid gap-2">
         <p className="text-[15px] font-medium">Falta algum banco?</p>
         <p className="text-sm text-muted-foreground">
@@ -134,5 +137,34 @@ export default async function ConnectionPage({ params }: { params: Promise<{ ite
         Ver a conexão no MeuPluggy
       </a>
     </div>
+  );
+}
+
+/** Assets this connection brings, with the choice of not bringing one (twins start excluded). */
+async function ConnectionInvestments({ userId, itemRowIds, itemId }: { userId: string; itemRowIds: string[]; itemId: string }) {
+  const rows = (await loadConnectionInvestments(userId, itemRowIds)).filter((r) => r.status !== "withdrawn" || r.include);
+  if (rows.length === 0) return null;
+  return (
+    <section className="grid gap-2">
+      <h2 className="px-1 text-base font-semibold">Investimentos desta conexão</h2>
+      <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+        {rows.map((r) => (
+          <li key={r.id} className="flex items-center gap-3 px-4 py-3">
+            <span className="grid min-w-0 flex-1 gap-0.5">
+              <span className="truncate text-[13px] font-medium">{r.name}</span>
+              <span className="text-xs text-muted-foreground">{r.status === "withdrawn" ? "Resgatado" : r.include ? "Aparece nos investimentos" : "Não trazido"}</span>
+            </span>
+            <span className="tabular text-[13px]"><Money cents={r.amount_cents} /></span>
+            <form action={investmentPreferenceAction}>
+              <input type="hidden" name="id" value={r.id} />
+              <input type="hidden" name="field" value="include" />
+              <input type="hidden" name="value" value={r.include ? "false" : "true"} />
+              <input type="hidden" name="returnTo" value={`/settings/connections/${itemId}`} />
+              <button type="submit" className="min-h-10 rounded-full px-3 text-[13px] font-medium text-primary hover:bg-muted">{r.include ? "Não trazer" : "Trazer"}</button>
+            </form>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

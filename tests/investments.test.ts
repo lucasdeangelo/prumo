@@ -16,6 +16,14 @@ import {
   movementFromProvider,
   netIfWithdrawn,
   type Movement,
+  type PortfolioItem,
+  type Snapshot,
+  evolution,
+  gainSince,
+  partnerInvestmentsView,
+  portfolioSeries,
+  portfolioSummary,
+  seriesDates,
 } from "../lib/domain/investments";
 
 describe("provider mapping", () => {
@@ -217,5 +225,85 @@ describe("goal progress with investments", () => {
     expect(completionMonth(1160000, deposits, "2026-11-16")).toBe("2028-02");
     expect(completionMonth(0, deposits, "2026-11-16")).toBe("2026-11");
     expect(completionMonth(100, [], "2026-11-16")).toBeNull();
+  });
+});
+
+describe("portfolio", () => {
+  const item = (over: Partial<PortfolioItem>): PortfolioItem => ({
+    id: "x",
+    ownerId: "ana",
+    type: "FIXED_INCOME",
+    subtype: "CDB",
+    amountCents: 0,
+    investedCents: 0,
+    status: "active",
+    scope: "mine",
+    visibility: "totals",
+    ...over,
+  });
+
+  it("sums open positions, gains and losses apart, by class", () => {
+    const s = portfolioSummary([
+      item({ id: "a", amountCents: 1209000, investedCents: 1100000 }),
+      item({ id: "b", type: "EQUITY", subtype: "STOCK", amountCents: 234120, investedCents: 255000 }),
+      item({ id: "c", type: "CRYPTO", subtype: null, amountCents: 147000, investedCents: null }),
+      item({ id: "d", amountCents: 999999, investedCents: 1, status: "withdrawn" }),
+    ]);
+    expect(s).toMatchObject({ count: 3, totalCents: 1590120, investedCents: 1502000, gainsCents: 109000, lossesCents: -20880, gainCents: 88120 });
+    expect(s.classes.map((c) => c.cls)).toEqual(["fixed", "equity", "crypto"]);
+    expect(s.classes[0].ratio).toBeCloseTo(1209000 / 1590120, 6);
+  });
+
+  it("never lets a private asset reach the partner, not even in the total", () => {
+    const view = partnerInvestmentsView([
+      item({ id: "secret", amountCents: 500000, visibility: "private" }),
+      item({ id: "total", amountCents: 100000, visibility: "totals" }),
+      item({ id: "open", amountCents: 50000, visibility: "details" }),
+      item({ id: "sold", amountCents: 70000, visibility: "details", status: "withdrawn" }),
+      item({ id: "shared", amountCents: 90000, scope: "ours", visibility: "private" }),
+    ]);
+    expect(view.totalCents).toBe(150000);
+    expect(view.assets.map((a) => a.id)).toEqual(["open"]);
+    expect(JSON.stringify(view)).not.toContain("secret");
+    expect(partnerInvestmentsView([item({ visibility: "private", amountCents: 1 })]).totalCents).toBeNull();
+  });
+
+  const snaps: Snapshot[] = [
+    { investmentId: "a", date: "2026-09-10", amountCents: 100000, investedCents: 100000 },
+    { investmentId: "a", date: "2026-10-31", amountCents: 102000, investedCents: 100000 },
+    { investmentId: "b", date: "2026-10-15", amountCents: 50000, investedCents: 52000 },
+    { investmentId: "a", date: "2026-11-14", amountCents: 103000, investedCents: 100000 },
+  ];
+
+  it("carries each asset's last value forward on every date", () => {
+    expect(portfolioSeries(snaps, ["2026-09-01", "2026-09-30", "2026-10-31", "2026-11-16"])).toEqual([
+      { date: "2026-09-30", amountCents: 100000, investedCents: 100000 },
+      { date: "2026-10-31", amountCents: 152000, investedCents: 152000 },
+      { date: "2026-11-16", amountCents: 153000, investedCents: 152000 },
+    ]);
+  });
+
+  it("uses month ends while the history is long enough, else each day with a value", () => {
+    expect(seriesDates(snaps, "2026-11-16", 6)).toEqual(["2026-09-30", "2026-10-31", "2026-11-16"]);
+    const fresh: Snapshot[] = [
+      { investmentId: "a", date: "2026-11-13", amountCents: 1, investedCents: 1 },
+      { investmentId: "a", date: "2026-11-14", amountCents: 2, investedCents: 1 },
+    ];
+    expect(seriesDates(fresh, "2026-11-16", 6)).toEqual(["2026-11-13", "2026-11-14"]);
+    expect(evolution(fresh, "2026-11-16", "6m").map((p) => p.label)).toEqual(["13/11", "14/11"]);
+    expect(evolution(snaps, "2026-11-16", "6m").map((p) => p.label)).toEqual(["set", "out", "nov"]);
+    expect(seriesDates([], "2026-11-16", 6)).toEqual([]);
+  });
+
+  it("counts this month's yield without taking new money as gain", () => {
+    const items = [
+      { id: "a", amountCents: 103000, investedCents: 100000, status: "active" as const },
+      // Bought this month for 52.000, now 50.500: yield −1.500 since its first value.
+      { id: "b", amountCents: 50500, investedCents: 52000, status: "active" as const },
+    ];
+    const withB: Snapshot[] = [...snaps.filter((s) => s.investmentId === "a"), { investmentId: "b", date: "2026-11-05", amountCents: 52000, investedCents: 52000 }];
+    // a: gain 3.000 now − 2.000 at 31/10 = 1.000; b: −1.500 − 0 = −1.500.
+    expect(gainSince(withB, items, "2026-11-01")).toBe(-500);
+    expect(gainSince([], items, "2026-11-01")).toBeNull();
   });
 });

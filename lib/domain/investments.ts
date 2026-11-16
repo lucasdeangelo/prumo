@@ -304,3 +304,152 @@ export function completionMonth(remainingCents: number, recentDeposits: Array<{ 
   if (monthly <= 0) return null;
   return monthOf(addMonths(today, Math.ceil(remainingCents / monthly)));
 }
+
+// ---------- Portfolio ----------
+
+export type PortfolioItem = {
+  id: string;
+  ownerId: string;
+  type: string;
+  subtype: string | null;
+  amountCents: number;
+  investedCents: number | null;
+  status: InvestmentStatus;
+  scope: "mine" | "ours";
+  visibility: "private" | "totals" | "details";
+};
+
+/** Open positions only: withdrawn assets keep their history but leave the totals. */
+export function isOpen(item: Pick<PortfolioItem, "status">): boolean {
+  return item.status !== "withdrawn";
+}
+
+/** "Meu patrimônio": total, put in, gains and losses apart, and where the money is. */
+export function portfolioSummary(items: PortfolioItem[]) {
+  const open = items.filter(isOpen);
+  let total = 0;
+  let invested = 0;
+  let gains = 0;
+  let losses = 0;
+  const byClass = new Map<AssetClass, number>();
+  for (const item of open) {
+    total += item.amountCents;
+    // Without a cost basis the asset adds to both sides: no gain is claimed for it.
+    invested += item.investedCents ?? item.amountCents;
+    const g = gain(item.amountCents, item.investedCents);
+    if (g && g.cents > 0) gains += g.cents;
+    if (g && g.cents < 0) losses += g.cents;
+    const cls = assetClass(item.type, item.subtype);
+    byClass.set(cls, (byClass.get(cls) ?? 0) + item.amountCents);
+  }
+  const classes = [...byClass.entries()]
+    .map(([cls, cents]) => ({ cls, label: ASSET_CLASS_LABEL[cls], cents, ratio: total > 0 ? cents / total : 0 }))
+    .sort((a, b) => b.cents - a.cents);
+  return {
+    count: open.length,
+    totalCents: total,
+    investedCents: invested,
+    gainCents: total - invested,
+    gainRatio: invested > 0 ? (total - invested) / invested : null,
+    gainsCents: gains,
+    lossesCents: losses,
+    classes,
+  };
+}
+
+/**
+ * What a person may see of the partner's investments outside Nosso. "Só eu vejo" does not exist
+ * for them, not even inside a total; "Só totais" adds to the total only; "Com detalhes" also shows
+ * the asset. Anything dropped here never leaves the server.
+ */
+export function partnerInvestmentsView(items: PortfolioItem[]) {
+  const shown = items.filter((i) => isOpen(i) && i.scope === "mine" && i.visibility !== "private");
+  return {
+    totalCents: shown.length > 0 ? shown.reduce((s, i) => s + i.amountCents, 0) : null,
+    assets: shown.filter((i) => i.visibility === "details"),
+  };
+}
+
+export type Snapshot = { investmentId: string; date: string; amountCents: number; investedCents: number | null };
+
+/**
+ * Sum of the assets on each date, carrying each asset's last known value forward. A date shows
+ * only once some asset already had a value on or before it.
+ */
+export function portfolioSeries(snapshots: Snapshot[], dates: string[]) {
+  const byAsset = new Map<string, Snapshot[]>();
+  for (const s of [...snapshots].sort((a, b) => a.date.localeCompare(b.date))) {
+    const list = byAsset.get(s.investmentId) ?? [];
+    list.push(s);
+    byAsset.set(s.investmentId, list);
+  }
+  const points: Array<{ date: string; amountCents: number; investedCents: number }> = [];
+  for (const date of dates) {
+    let amount = 0;
+    let invested = 0;
+    let any = false;
+    for (const list of byAsset.values()) {
+      let last: Snapshot | undefined;
+      for (const s of list) {
+        if (s.date > date) break;
+        last = s;
+      }
+      if (!last) continue;
+      any = true;
+      amount += last.amountCents;
+      invested += last.investedCents ?? last.amountCents;
+    }
+    if (any) points.push({ date, amountCents: amount, investedCents: invested });
+  }
+  return points;
+}
+
+/**
+ * Dates for the evolution chart: the end of each month in the period and today. When the history
+ * is shorter than two of those, each day with a value is a point instead.
+ */
+export function seriesDates(snapshots: Snapshot[], today: string, months: number | "all") {
+  const first = snapshots.map((s) => s.date).sort()[0];
+  if (!first) return [];
+  const startMonth = months === "all" ? monthOf(first) : monthOf(addMonths(today, -(months - 1)));
+  const dates: string[] = [];
+  for (let m = startMonth; m < monthOf(today); m = monthOf(addMonths(`${m}-01`, 1))) {
+    dates.push(addDays(`${monthOf(addMonths(`${m}-01`, 1))}-01`, -1));
+  }
+  dates.push(today);
+  const covered = dates.filter((d) => d >= first);
+  if (covered.length >= 2) return covered;
+  const from = `${startMonth}-01`;
+  return [...new Set(snapshots.map((s) => s.date).filter((d) => d >= from && d <= today))].sort();
+}
+
+/**
+ * "Rendeu em <mês>": change of gain since the start of the month. Assets first seen inside the
+ * month count from their first value, so money put in is never taken as yield.
+ */
+export function gainSince(snapshots: Snapshot[], items: Array<Pick<PortfolioItem, "id" | "amountCents" | "investedCents" | "status">>, from: string): number | null {
+  let total = 0;
+  let any = false;
+  for (const item of items.filter(isOpen)) {
+    if (item.investedCents === null) continue;
+    const own = snapshots.filter((s) => s.investmentId === item.id && s.investedCents !== null).sort((a, b) => a.date.localeCompare(b.date));
+    const base = [...own].reverse().find((s) => s.date < from) ?? own[0];
+    if (!base) continue;
+    any = true;
+    total += item.amountCents - item.investedCents - (base.amountCents - (base.investedCents ?? base.amountCents));
+  }
+  return any ? total : null;
+}
+
+const MONTH_SHORT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/** Chart points with their axis label: month names for monthly points, "dd/mm" for daily ones. */
+export function evolution(snapshots: Snapshot[], today: string, period: "6m" | "1a" | "tudo") {
+  const dates = seriesDates(snapshots, today, period === "6m" ? 6 : period === "1a" ? 12 : "all");
+  const points = portfolioSeries(snapshots, dates);
+  const monthly = dates.slice(0, -1).every((d) => addDays(d, 1).endsWith("-01")) && dates.length > 1;
+  return points.map((p) => ({
+    ...p,
+    label: monthly ? MONTH_SHORT[Number(p.date.slice(5, 7)) - 1] : `${p.date.slice(8, 10)}/${p.date.slice(5, 7)}`,
+  }));
+}

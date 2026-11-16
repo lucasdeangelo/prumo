@@ -3,17 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { CalendarIcon, CardIcon, HomeIcon, RepeatIcon, SlidersIcon } from "@/components/app/icons";
+import { CalendarIcon, CardIcon, HomeIcon, RepeatIcon, TrendIcon } from "@/components/app/icons";
 import { cn } from "@/lib/utils";
 
-// Navigation map: fixed bottom bar Início · Mês · Cartões · Assinaturas · Ajustes.
-// Upcoming bills live under Mês; tags and connections under Ajustes.
+// Navigation map: fixed bottom bar Início · Mês · Cartões · Assinaturas · Investimentos.
+// Upcoming bills live under Mês; Ajustes (tags, connections) opens from the gear on Início.
 const ITEMS = [
-  { href: "/overview", label: "Início", icon: HomeIcon, match: ["/overview"] },
+  { href: "/overview", label: "Início", icon: HomeIcon, match: ["/overview", "/settings"] },
   { href: "/monthly", label: "Mês", icon: CalendarIcon, match: ["/monthly", "/upcoming", "/transactions"] },
   { href: "/cards", label: "Cartões", icon: CardIcon, match: ["/cards"] },
   { href: "/subscriptions", label: "Assinaturas", icon: RepeatIcon, match: ["/subscriptions"] },
-  { href: "/settings", label: "Ajustes", icon: SlidersIcon, match: ["/settings"] },
+  { href: "/investments", label: "Investimentos", icon: TrendIcon, match: ["/investments"] },
 ];
 
 /** `month` (AAAA-MM) points Mês straight at the current month, skipping a redirect. */

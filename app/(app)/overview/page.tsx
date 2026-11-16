@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Amount, SectionHeader } from "@/components/app/bits";
 import { CoupleAvatars, InstitutionMark, SegmentBar, SpaceSwitcher, UpdatedAt, VisibilityBadge, PERSON_BG } from "@/components/app/couple";
 import { BalanceCard, HomeAnalytics } from "@/components/app/home-analytics";
-import { ChevronRightIcon } from "@/components/app/icons";
+import { ChevronRightIcon, GearIcon } from "@/components/app/icons";
 import { Card, EmptyState } from "@/components/ui/card";
 import { Money } from "@/components/app/money";
 import { getHousehold } from "@/lib/application/household";
@@ -46,7 +46,18 @@ export default async function OverviewPage() {
 
   return (
     <div className="grid gap-5">
-      <SpaceSwitcher space={shownSpace} me={me} partner={partner} returnTo="/overview" hideValues />
+      <SpaceSwitcher
+        space={shownSpace}
+        me={me}
+        partner={partner}
+        returnTo="/overview"
+        hideValues
+        trailing={
+          <Link href="/settings" aria-label="Ajustes" className="-my-1 -mr-3 flex size-11 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-muted hover:text-foreground">
+            <GearIcon className="size-[22px]" />
+          </Link>
+        }
+      />
       {shownSpace === "nosso" ? (
         partner && household ? (
           <NossoHome userId={user.id} household={household} ctxIn={ctx} today={today} month={month} lowerMonth={lowerMonth} historyStart={historyStart} />
