@@ -276,3 +276,53 @@ Plan and decisions: [INVESTMENTS_PLAN.md](../INVESTMENTS_PLAN.md).
 - **Daily job:** a second run did no work.
 - **Browser:** the form estimate showed ≈ R$ 3.291,14 for the same CDB held to 15/03/2027.
 - **Found:** a manual asset without movements would have been zeroed by the daily revaluation; it is now left as it is.
+
+## Phase 5 — Investments and goals in the app, version 2.0.0 (2026-11-16) · PASS
+
+### Delivered
+
+| Area | Files | Notes |
+| --- | --- | --- |
+| Mobile API | `lib/mobile/screens/investments.ts`, `lib/mobile/screens/index.ts`, `lib/mobile/actions.ts` | New screens and six actions. See the details below. |
+| Shared labels | `lib/domain/investments.ts` | `describeAsset`, `rateText` and `goalChip` moved to the domain, so the web and the app word assets and goal chips the same way. |
+| App screens | `mobile/src/app/(app)/investments/*`, `mobile/src/ui/investments.tsx`, `mobile/src/app/(app)/couple/goals/*` | See the list below. |
+| Version | `mobile/app.json` | 2.0.0, versionCode 4. |
+
+**Mobile API:**
+- **New screens:**
+  - `investments`, `investments/new`, `investments/:id`, `investments/:id/link` and `investments/:id/movement`;
+  - `couple/goals/:id/investments`.
+- **Updated goal screens:**
+  - `couple/goals` has a personal list;
+  - `couple/goals/new` accepts `?de=meu`;
+  - `couple/goals/:id` finds personal goals and includes the linked assets, put in and earned.
+- **New actions:** `investmentPreference`, `linkInvestment`, `unlinkInvestment`, `createManualInvestment`, `recordMovement` and `deleteManual`.
+
+**App screens:**
+- **Navigation:** the Investimentos tab replaces Ajustes, which opens from a gear on Início (D1).
+- **Portfolio (Meu and Nosso):**
+  - patrimony;
+  - an evolution chart where tapping a point reads it;
+  - "Onde está";
+  - "Minhas metas" on Meu and "Por meta" on Nosso;
+  - assets with goal chips, a filter in Nosso, and withdrawn assets grouped apart;
+  - "Fora do Nosso".
+- **Asset detail:** lines, goal cards, the link card, manual movement buttons, owner choices, and delete or "não trazer".
+- **Link screen:** link to a goal, whole or as a part.
+- **Movement form:** aporte, resgate, compra, venda, a new quote or a new total.
+- **New investment:** the type grid, and a maturity estimate computed on the device with the shared domain code.
+- **Goals:** "De quem é" when creating a goal, a "Só minhas" list, and on the goal screen the linked investments plus the put-in and earned bar.
+
+### Gates
+
+| Gate | Result |
+| --- | --- |
+| Web: `npm run typecheck`, `npm run lint`, `npm test` | pass, 123 tests |
+| App: `npm run typecheck`, `npm run lint` | pass |
+| Mobile API on the local Supabase | See below. |
+| APK | Release build 2.0.0, arm64. |
+
+**Mobile API on the local Supabase (fictional data):**
+- Every new screen loader answered with the expected shape: the stock detail lines, the goal cards, the link options, the movement kind, and today's Banco Central rates on "Novo investimento".
+- The personal goal shows its linked assets, put in and earned.
+- **Signed in as the partner:** the personal goal is absent from the goal list and its URL fails; the private fund and the other person's "Meu" assets never appear.
