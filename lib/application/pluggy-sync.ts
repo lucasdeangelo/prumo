@@ -11,6 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { autoReconcileBills } from "./bills";
 import { applyAutoOurs } from "./cards";
+import { syncInvestments } from "./investments-sync";
 import { applyRulesToRecent } from "./privacy";
 import { runSubscriptionDetection } from "./subscriptions";
 
@@ -226,12 +227,21 @@ export async function syncItem(userId: string, pluggyItemId: string) {
     perAccount.push({ accountId: local.id, imported: rows.length });
   }
 
+  // Isolated: a failure here must not undo or block the import of accounts and transactions.
+  let investments: { available: boolean; investments: number; movements: number; failed?: boolean };
+  try {
+    investments = await syncInvestments(userId, row.id as string, pluggyItemId);
+  } catch (error) {
+    console.error("investments sync failed", error instanceof Error ? error.message : error);
+    investments = { available: true, investments: 0, movements: 0, failed: true };
+  }
+
   await admin.from("pluggy_items").update({ last_sync_at: new Date().toISOString() }).eq("user_id", userId).eq("id", row.id);
   await applyRulesToRecent(userId, from, syncStartedAt);
   await applyAutoOurs(userId, syncStartedAt);
   await runSubscriptionDetection(userId);
   const { settled } = await autoReconcileBills(userId);
-  return { accounts: accounts.length, imported, settled, status: item.status, executionStatus: item.executionStatus ?? null, perAccount };
+  return { accounts: accounts.length, imported, settled, status: item.status, executionStatus: item.executionStatus ?? null, perAccount, investments };
 }
 
 const SETTLED_STATUSES = new Set(["UPDATED", "LOGIN_ERROR", "OUTDATED", "WAITING_USER_INPUT"]);
@@ -328,6 +338,7 @@ export async function disconnectItem(userId: string, pluggyItemId: string, optio
     const { data: accounts } = await admin.from("accounts").select("id").eq("user_id", userId).eq("pluggy_item_id", row.id);
     const ids = (accounts ?? []).map((a) => a.id as string);
     if (ids.length) await admin.from("transactions").update({ deleted_at: now }).eq("user_id", userId).in("account_id", ids).is("deleted_at", null);
+    await admin.from("investments").update({ deleted_at: now }).eq("user_id", userId).eq("pluggy_item_id", row.id).is("deleted_at", null);
   }
   await admin.from("pluggy_items").update({ deleted_at: now, status: "DELETED" }).eq("user_id", userId).eq("id", row.id);
 }

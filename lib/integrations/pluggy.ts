@@ -156,6 +156,83 @@ export async function listBills(accountId: string): Promise<PluggyBill[]> {
   return data.results ?? [];
 }
 
+/**
+ * A position at the institution. On Open Finance `amountProfit` and the return rates come empty;
+ * `rate`/`rateType` are the contract ("110" + "CDI"), not measured performance.
+ * Contract checked against https://docs.pluggy.ai/reference/investments-list on 2026-11-16.
+ */
+export type PluggyInvestment = {
+  id: string;
+  itemId?: string;
+  type: string;
+  subtype?: string | null;
+  name: string;
+  code?: string | null;
+  isin?: string | null;
+  issuer?: string | null;
+  /** Gross value today. */
+  amount?: number | null;
+  /** Net value after fees and taxes. */
+  balance?: number | null;
+  /** Originally invested (cost basis). */
+  amountOriginal?: number | null;
+  amountProfit?: number | null;
+  amountWithdrawal?: number | null;
+  /** Income tax (IR) and financial transactions tax (IOF). */
+  taxes?: number | null;
+  taxes2?: number | null;
+  quantity?: number | null;
+  value?: number | null;
+  rate?: number | null;
+  rateType?: string | null;
+  fixedAnnualRate?: number | null;
+  date?: string | null;
+  dueDate?: string | null;
+  issueDate?: string | null;
+  status?: "ACTIVE" | "PENDING" | "TOTAL_WITHDRAWAL" | string | null;
+  institution?: { name?: string | null } | null;
+};
+
+export type PluggyInvestmentTransaction = {
+  id: string;
+  type: string;
+  movementType?: "CREDIT" | "DEBIT" | string | null;
+  date: string;
+  tradeDate?: string | null;
+  quantity?: number | null;
+  value?: number | null;
+  /** Gross amount. */
+  amount?: number | null;
+  netAmount?: number | null;
+  description?: string | null;
+};
+
+/** Every investment of an item, in any status. Page-number pagination, bounded. */
+export async function listInvestments(itemId: string): Promise<PluggyInvestment[]> {
+  const all: PluggyInvestment[] = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const data = await request<{ results: PluggyInvestment[]; totalPages?: number }>(
+      `/investments?itemId=${encodeURIComponent(itemId)}&pageSize=500&page=${page}`,
+    );
+    all.push(...(data.results ?? []));
+    if (!data.totalPages || page >= data.totalPages) break;
+  }
+  return all;
+}
+
+/** Buys, sells, income and taxes of one investment. */
+export async function listInvestmentTransactions(investmentId: string): Promise<PluggyInvestmentTransaction[]> {
+  const all: PluggyInvestmentTransaction[] = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const data = await request<{ results: PluggyInvestmentTransaction[]; totalPages?: number }>(
+      `/investments/${encodeURIComponent(investmentId)}/transactions?pageSize=500&page=${page}`,
+    );
+    all.push(...(data.results ?? []));
+    if (!data.totalPages || page >= data.totalPages) break;
+  }
+  return all;
+}
+
 /** Cursor pagination over /v2/transactions. Bounded to avoid runaway loops. */
 export async function listTransactions(accountId: string, dateFrom: string, dateTo: string): Promise<PluggyTransaction[]> {
   const all: PluggyTransaction[] = [];
