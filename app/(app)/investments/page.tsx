@@ -112,7 +112,7 @@ async function MeuView({ rows, color, partnerName, period, filter, today, synced
         </>
       ) : (
         <>
-          <section className="grid gap-4 rounded-2xl border border-border border-t-[3px] bg-card p-[18px]" style={{ borderTopColor: PERSON_BG[color] }}>
+          <section className="grid gap-4 rounded-2xl border border-border bg-card p-[18px]">
             <div className="grid gap-1.5">
               <span className="label-mono">Meu patrimônio</span>
               <HeroAmount cents={summary.totalCents} />
@@ -183,7 +183,7 @@ async function NossoView({
           <section className="grid gap-4 rounded-2xl bg-primary p-5 text-white">
             <div className="grid gap-1.5">
               <span className="label-mono text-[#CFE0D8]">Patrimônio do casal</span>
-              <HeroAmount cents={summary.totalCents} dim="text-[#CFE0D8]" />
+              <HeroAmount cents={summary.totalCents} />
               <span className="flex flex-wrap items-center gap-2 text-[13px]">
                 <GainPill cents={summary.gainCents} ratio={summary.gainRatio} tone="onPrimary" />
                 <span className="text-[#CFE0D8]">desde o início</span>

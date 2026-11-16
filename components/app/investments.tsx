@@ -172,12 +172,11 @@ export function ClassBreakdown({ classes, title = "Onde está", note }: { classe
   );
 }
 
-/** Big amount with the cents dimmed ("R$ 19.425,20"). */
-export function HeroAmount({ cents, dim = "text-muted-foreground" }: { cents: number; dim?: string }) {
-  const [whole, frac] = formatBRL(cents).split(",");
+/** Big amount ("R$ 19.425,20"), cents in the same color as the rest. */
+export function HeroAmount({ cents }: { cents: number }) {
   return (
     <span className="money tabular text-[40px] font-medium leading-[1.05] tracking-[-0.03em]">
-      <span className="money-value">{whole}<span className={dim}>,{frac}</span></span>
+      <span className="money-value">{formatBRL(cents)}</span>
       <span className="money-mask"><span aria-hidden="true">R$ ••••</span><span className="sr-only">valor oculto</span></span>
     </span>
   );
