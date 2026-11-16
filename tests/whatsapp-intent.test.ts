@@ -56,3 +56,27 @@ describe("AI draft validation", () => {
     expect(draftFromAi({ tipo: "saida", valor: 10, descricao: "x", data: "2030-01-01" }, today)?.date).toBe(today);
   });
 });
+
+describe("investments and goals on WhatsApp", () => {
+  it("lists them with or without a possessive", () => {
+    expect(parseMessage("investimentos", today)).toEqual({ kind: "query", query: "investments" });
+    expect(parseMessage("Meus investimentos", today)).toEqual({ kind: "query", query: "investments" });
+    expect(parseMessage("carteira", today)).toEqual({ kind: "query", query: "investments" });
+    expect(parseMessage("patrimônio", today)).toEqual({ kind: "query", query: "investments" });
+    expect(parseMessage("metas", today)).toEqual({ kind: "query", query: "goals" });
+    expect(parseMessage("minhas metas", today)).toEqual({ kind: "query", query: "goals" });
+    expect(parseMessage("metas do casal", today)).toEqual({ kind: "query", query: "goals" });
+  });
+
+  it("picks one by name", () => {
+    expect(parseMessage("investimento CDB Nubank", today)).toEqual({ kind: "query", query: "investments", arg: "cdb nubank" });
+    expect(parseMessage("rendimento do tesouro", today)).toEqual({ kind: "query", query: "investments", arg: "tesouro" });
+    expect(parseMessage("meta viagem", today)).toEqual({ kind: "query", query: "goals", arg: "viagem" });
+    expect(parseMessage("meta da reforma", today)).toEqual({ kind: "query", query: "goals", arg: "reforma" });
+  });
+
+  it("keeps money messages as transactions", () => {
+    expect(parseMessage("recebi 50 rendimento", today).kind).toBe("transaction");
+    expect(parseMessage("gastei 30 investimento curso", today).kind).toBe("transaction");
+  });
+});

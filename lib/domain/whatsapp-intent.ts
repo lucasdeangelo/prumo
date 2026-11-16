@@ -12,12 +12,12 @@ export type TransactionDraft = {
   tagHint: string | null;
 };
 
-export type QueryKind = "summary" | "upcoming" | "balance" | "subscriptions" | "recent";
+export type QueryKind = "summary" | "upcoming" | "balance" | "subscriptions" | "recent" | "investments" | "goals";
 
 export type Intent =
   | { kind: "help" }
   | { kind: "link"; code: string }
-  | { kind: "query"; query: QueryKind }
+  | { kind: "query"; query: QueryKind; arg?: string }
   | { kind: "transaction"; draft: TransactionDraft }
   | { kind: "needs_ai" }
   | { kind: "unknown" };
@@ -33,7 +33,12 @@ const QUERIES: Array<{ query: QueryKind; words: string[] }> = [
   { query: "upcoming", words: ["contas", "proximas contas", "a pagar", "vencimentos", "futuras", "boletos"] },
   { query: "subscriptions", words: ["assinaturas", "assinatura"] },
   { query: "recent", words: ["ultimas", "ultimos", "extrato", "movimentacoes"] },
+  { query: "investments", words: ["investimentos", "investimento", "carteira", "patrimonio", "aplicacoes", "rendimentos", "rendimento"] },
+  { query: "goals", words: ["metas", "meta", "objetivos"] },
 ];
+
+// "investimento cdb nubank", "meta viagem": the rest of the message picks one by name.
+const NAMED: QueryKind[] = ["investments", "goals"];
 
 /** Pulls a date hint out of the text: "ontem", "anteontem", "hoje", "dia 12", "12/10". */
 export function extractDate(text: string, today: string): { date: string; rest: string } {
@@ -91,7 +96,13 @@ export function parseMessage(raw: string, today: string): Intent {
   if (link) return { kind: "link", code: link[1].toUpperCase().replace(/-/g, "") };
 
   for (const q of QUERIES) {
-    if (q.words.some((w) => text === w || text === `/${w}` || text.startsWith(`${w} `) || text.startsWith(`meu ${w}`) || text.startsWith(`minhas ${w}`))) {
+    const word = q.words.find((w) => text === w || text === `/${w}` || text.startsWith(`${w} `) || text.startsWith(`meu ${w}`) || text.startsWith(`meus ${w}`) || text.startsWith(`minha ${w}`) || text.startsWith(`minhas ${w}`));
+    if (word) {
+      if (NAMED.includes(q.query)) {
+        const arg = text.replace(/^(?:meus?|minhas?)\s+/, "").replace(/^\//, "").slice(word.length).trim().replace(CONNECTORS, "").trim();
+        // "investimentos do mes" or "metas do casal" are still the list.
+        if (arg && !/^(?:mes|deste mes|este mes|casal|nossas?|nossos?|minhas?|meus?)$/.test(arg)) return { kind: "query", query: q.query, arg };
+      }
       return { kind: "query", query: q.query };
     }
   }

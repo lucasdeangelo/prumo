@@ -9,6 +9,8 @@ import { formatBRL } from "@/lib/domain/money";
 import { normalizeText } from "@/lib/domain/normalize";
 import { monthlyEquivalentCents } from "@/lib/domain/recurrence";
 import { summarizeMonth } from "@/lib/domain/summary";
+import { estimateAtMaturity, ratesFromSnapshot, termsFromRow } from "@/lib/domain/fixed-income";
+import { describeAsset, gain, gainSince, isOpen, netIfWithdrawn, portfolioSummary } from "@/lib/domain/investments";
 import { draftFromAi, parseMessage, type QueryKind, type TransactionDraft } from "@/lib/domain/whatsapp-intent";
 import { requireServerEnv } from "@/lib/env.server";
 import { hmacHex } from "@/lib/internal/auth";
@@ -17,6 +19,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { transactionLabel } from "@/lib/types";
 
 import { markBillPaid } from "./bills";
+import { goalsOverview, type GoalOverview } from "./couple-data";
+import { loadAssetGoals } from "./goal-links";
+import { getHousehold } from "./household";
+import { loadInvestments, loadSnapshots, toPortfolioItem, type InvestmentRow } from "./investments";
+import { ratesSnapshot } from "./market-rates";
 import { categorizeFor, createTransaction } from "./transactions";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -100,6 +107,7 @@ export const HELP_TEXT = [
   "✅ *paguei aluguel* — quita uma conta futura pelo nome",
   "",
   "📊 *resumo* · *saldo* · *contas* · *assinaturas* · *últimas*",
+  "📈 *investimentos* · *investimento cdb nubank* · *metas* · *meta viagem*",
 ].join("\n");
 
 export type ProposedAction =
@@ -146,6 +154,8 @@ export async function interpret(userId: string, text: string, aiOutput?: unknown
     case "link":
       return { kind: "reply", text: "ℹ️ Este WhatsApp já está vinculado." };
     case "query":
+      if (intent.query === "investments") return { kind: "reply", text: await answerInvestments(userId, intent.arg) };
+      if (intent.query === "goals") return { kind: "reply", text: await answerGoals(userId, intent.arg) };
       return { kind: "reply", text: await answerQuery(userId, intent.query) };
     case "transaction": {
       const { text: confirmation, tagId } = await describeDraft(userId, intent.draft);
@@ -249,3 +259,127 @@ async function answerQuery(userId: string, query: QueryKind): Promise<string> {
 export const AI_SYSTEM_PROMPT = `Extraia UMA movimentação financeira da mensagem e responda APENAS JSON válido, sem markdown:
 {"tipo":"saida"|"entrada","valor":number,"descricao":string,"categoria":string|null,"data":"YYYY-MM-DD"|null}
 Use "saida" para gastos/pagamentos e "entrada" para recebimentos. "valor" em reais, ponto decimal. "descricao" curta (até 5 palavras). Não invente valores.`;
+
+// ---------- Investimentos e metas ----------
+
+const pct = (ratio: number | null) => (ratio === null ? "" : ` (${ratio >= 0 ? "+" : "−"}${Math.abs(ratio * 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)`);
+const signed = (cents: number) => `${cents >= 0 ? "+" : "−"}${formatBRL(Math.abs(cents))}`;
+const dateBR = (iso: string) => iso.split("-").reverse().join("/");
+
+/** Best match by name: every word typed appears in the name ("cdb nubank" → "CDB Nubank 110% CDI"). */
+function byName<T extends { name: string }>(items: T[], wanted: string): T | null {
+  const words = normalizeText(wanted).split(" ").filter(Boolean);
+  return items.find((i) => normalizeText(i.name) === normalizeText(wanted)) ?? items.find((i) => words.every((w) => normalizeText(i.name).includes(w))) ?? null;
+}
+
+/**
+ * "investimentos": the person's own assets (Meu and the ones in Nosso) and the couple's Nosso.
+ * The partner's "Meu" assets never appear here, whatever their visibility.
+ */
+async function answerInvestments(userId: string, arg?: string): Promise<string> {
+  const household = await getHousehold(userId);
+  const partner = household?.partner ?? null;
+  const memberIds = [userId, partner?.userId].filter(Boolean) as string[];
+  const rows = (await loadInvestments(memberIds)).filter((r) => r.user_id === userId || r.scope === "ours");
+  const open = rows.filter(isOpen);
+  if (open.length === 0) return "ℹ️ Nenhum investimento aberto ainda. Conecte o banco ou cadastre à mão em *Investimentos* no app.";
+
+  if (arg) {
+    const row = byName(open, arg);
+    if (!row) return `❓ Não achei um investimento com “${arg}”. Envie *investimentos* para ver a lista.`;
+    return describeInvestment(row, row.user_id === userId ? null : (partner?.name ?? "seu par"));
+  }
+
+  const mine = open.filter((r) => r.user_id === userId && (!partner || r.scope === "mine"));
+  const ours = partner ? open.filter((r) => r.scope === "ours") : [];
+  const shown = [...mine, ...ours];
+  const summary = portfolioSummary(shown.map(toPortfolioItem));
+  const snapshots = await loadSnapshots(shown.map((r) => r.id));
+  const month = gainSince(snapshots, shown.map(toPortfolioItem), `${monthOf(todayIn())}-01`);
+  const goals = await loadAssetGoals(shown.map((r) => r.id));
+  const goalOf = (r: InvestmentRow) => (goals.get(r.id) ?? []).find((g) => g.scope === "ours" || g.ownerId === userId)?.name;
+  const line = (r: InvestmentRow) => {
+    const g = gain(r.amount_cents, r.invested_cents);
+    const goal = goalOf(r);
+    return `• ${r.name}: ${formatBRL(r.amount_cents)}${g ? ` (${signed(g.cents)})` : ""}${goal ? ` 🎯 ${goal}` : ""}`;
+  };
+  return [
+    "📈 *Seus investimentos*",
+    "",
+    `💼 Patrimônio: ${formatBRL(summary.totalCents)}`,
+    `💵 Aplicado: ${formatBRL(summary.investedCents)}`,
+    `${summary.gainCents >= 0 ? "📈" : "📉"} Resultado: ${signed(summary.gainCents)}${pct(summary.gainRatio)}`,
+    ...(month !== null ? [`🗓️ Rendeu este mês: ${signed(month)}`] : []),
+    "",
+    "*Onde está:*",
+    ...summary.classes.map((c) => `• ${c.label}: ${formatBRL(c.cents)} (${Math.round(c.ratio * 100)}%)`),
+    "",
+    ...(partner && mine.length ? ["*Meu:*", ...mine.slice(0, 8).map(line), ""] : []),
+    ...(partner && ours.length ? [`*Nosso (com ${partner.name}):*`, ...ours.slice(0, 8).map(line), ""] : []),
+    ...(!partner ? [...mine.slice(0, 10).map(line), ""] : []),
+    "Detalhes de um: *investimento cdb nubank*. Valores brutos, antes do IR.",
+  ].join("\n");
+}
+
+async function describeInvestment(row: InvestmentRow, ownerName: string | null): Promise<string> {
+  const today = todayIn();
+  const g = gain(row.amount_cents, row.invested_cents);
+  const lines = [`📈 *${row.name}*`, describeAsset(row), "", `💼 Valor hoje: ${formatBRL(row.amount_cents)}`];
+  if (row.invested_cents !== null) lines.push(`💵 Aplicado: ${formatBRL(row.invested_cents)}`);
+  if (g) lines.push(`${g.cents >= 0 ? "📈" : "📉"} Resultado: ${signed(g.cents)}${pct(g.ratio)}`);
+  if (row.type === "FIXED_INCOME") {
+    const net = netIfWithdrawn({ type: row.type, subtype: row.subtype, amountCents: row.amount_cents, investedCents: row.invested_cents, taxesCents: row.taxes_cents, since: row.issue_date, today });
+    lines.push(`🏦 Se resgatar hoje: ${formatBRL(net.netCents)}${net.estimated && net.taxCents > 0 ? " (IR estimado)" : ""}`);
+    const terms = termsFromRow(row);
+    if (terms && row.due_date && row.due_date > today) {
+      const rates = await ratesSnapshot().catch(() => null);
+      if (rates) {
+        const e = estimateAtMaturity({ amountCents: row.amount_cents, investedCents: row.invested_cents ?? row.amount_cents, since: row.issue_date ?? today, today, due: row.due_date, terms, rates: ratesFromSnapshot(rates), type: row.type, subtype: row.subtype });
+        lines.push(`📅 No vencimento (${dateBR(row.due_date)}): ≈ ${formatBRL(e.netCents)}${e.taxRate > 0 ? ", já descontado o IR" : ""}`);
+      }
+    }
+  } else if (row.unit_value_cents !== null && row.quantity) {
+    lines.push(`🏷️ Cotação: ${formatBRL(row.unit_value_cents)} × ${row.quantity.toLocaleString("pt-BR", { maximumFractionDigits: 8 })}`);
+  }
+  lines.push("", row.source === "manual" ? (ownerName ? `Cadastrado no Prumo por ${ownerName}.` : "Cadastrado por você no Prumo.") : "Valor informado pelo banco.", "O Prumo mostra os números, não recomenda comprar ou vender.");
+  return lines.join("\n");
+}
+
+/** "metas": the couple's goals and the person's own (never the partner's personal ones). */
+async function answerGoals(userId: string, arg?: string): Promise<string> {
+  const household = await getHousehold(userId);
+  if (!household) return "ℹ️ Nenhuma meta ainda. Crie uma em *Investimentos → Minhas metas* no app.";
+  const today = todayIn();
+  const [ours, mine] = await Promise.all([goalsOverview(household.id, today), goalsOverview(household.id, today, { ownerId: userId })]);
+  const open = (g: GoalOverview) => g.status === "active" || g.status === "pending";
+  const mineOpen = mine.filter(open);
+  const oursOpen = ours.filter(open);
+  const all = [...mineOpen, ...oursOpen];
+  if (all.length === 0) return "ℹ️ Nenhuma meta em andamento. Crie uma em *Investimentos → Minhas metas* no app.";
+  const shortMonth = new Intl.DateTimeFormat("pt-BR", { month: "short", year: "numeric", timeZone: "UTC" });
+  const line = (g: GoalOverview) =>
+    `• ${g.icon ? `${g.icon} ` : ""}${g.name}: ${formatBRL(g.savedCents)} de ${formatBRL(g.targetCents)} (${g.progress.percent}%)${g.earnedCents > 0 ? ` · rendeu ${formatBRL(g.earnedCents)}` : ""}${g.deadline ? ` · ${shortMonth.format(new Date(`${g.deadline}T00:00:00Z`))}` : ""}`;
+
+  if (arg) {
+    const g = byName(all, arg);
+    if (!g) return `❓ Não achei uma meta com “${arg}”. Envie *metas* para ver a lista.`;
+    const reach = g.progress.reachMonth ? new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${g.progress.reachMonth}-01T00:00:00Z`)) : null;
+    return [
+      `🎯 *${g.name}*${g.scope === "mine" ? " (só sua)" : household.partner ? " (do casal)" : ""}`,
+      "",
+      `💰 Guardado: ${formatBRL(g.savedCents)} de ${formatBRL(g.targetCents)} (${g.progress.percent}%)`,
+      ...(g.investmentIds.length ? [`💵 Aplicado: ${formatBRL(g.contributedCents)} · rendeu ${signed(g.earnedCents)}`, `📈 ${g.investmentIds.length === 1 ? "1 investimento conta" : `${g.investmentIds.length} investimentos contam`} para ela`] : []),
+      ...(g.status === "pending" ? ["⏳ Aguardando confirmação do casal"] : []),
+      ...(reach && g.status === "active" ? [`🗓️ No ritmo atual, chega lá em ${reach}`] : []),
+      ...(g.status === "active" && g.progress.extraMonthlyCents > 0 ? [`➕ Para chegar no prazo: +${formatBRL(g.progress.extraMonthlyCents)} por mês`] : []),
+    ].join("\n");
+  }
+
+  return [
+    "🎯 *Metas*",
+    ...(mineOpen.length ? ["", household.partner ? "*Só suas:*" : "*Suas:*", ...mineOpen.map(line)] : []),
+    ...(oursOpen.length ? ["", household.partner ? `*Do casal (com ${household.partner.name}):*` : "*Da casa:*", ...oursOpen.map(line)] : []),
+    "",
+    "Detalhes de uma: *meta viagem*.",
+  ].join("\n");
+}
