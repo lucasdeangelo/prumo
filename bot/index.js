@@ -16,6 +16,7 @@ const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2:1b";
 const AI_ENABLED = process.env.AI_ENABLED !== "false";
 const OUTBOX_INTERVAL_MS = Number(process.env.OUTBOX_INTERVAL_MS || 30000);
+const HEALTH_INTERVAL_MS = Number(process.env.HEALTH_INTERVAL_MS || 5 * 60 * 1000);
 // Outside the app folder: the WhatsApp browser profile changes every few seconds, and inside the
 // project it makes `next dev` recompile in a loop.
 const SESSION_PATH = process.env.WHATSAPP_SESSION_PATH || path.join(os.homedir(), ".prumo-bot", "session");
@@ -36,13 +37,28 @@ const client = new Client({
 });
 
 let ready = false;
+let failedSends = 0;
+
+/**
+ * WhatsApp Web can freeze inside the browser while the process keeps running: sends time out and
+ * no message arrives. Exiting lets Docker (restart: unless-stopped) start a fresh browser with the
+ * saved session, which needs no new QR code.
+ */
+async function restart(reason) {
+  console.error(`🔄 Reiniciando o bot: ${reason}`);
+  await withTimeout(client.destroy(), 10000, "destroy").catch(() => {});
+  process.exit(1);
+}
 
 async function safeSend(chatId, text) {
   try {
     await withTimeout(client.sendMessage(chatId, text), 20000, "sendMessage");
+    failedSends = 0;
     return true;
   } catch (error) {
     console.error(`Erro ao enviar para ${chatId}:`, describe(error));
+    failedSends += 1;
+    if (failedSends >= 3) restart(`${failedSends} envios seguidos falharam`);
     return false;
   }
 }
@@ -56,6 +72,7 @@ client.on("auth_failure", (msg) => console.error("❌ Falha de autenticação:",
 client.on("disconnected", (reason) => {
   ready = false;
   console.warn("⚠️ Desconectado:", reason);
+  restart(`desconectado (${reason})`);
 });
 client.on("ready", () => {
   ready = true;
@@ -202,6 +219,26 @@ async function deliverOutbox() {
 }
 
 setInterval(deliverOutbox, OUTBOX_INTERVAL_MS);
+
+// ==================== VIGIA DA CONEXÃO ====================
+// After the first "ready", ask WhatsApp Web its state now and then. Two failed checks in a row
+// (no answer, or not CONNECTED) mean the session froze: restart instead of staying silent.
+let failedChecks = 0;
+setInterval(async () => {
+  if (!ready) return;
+  try {
+    const state = await withTimeout(client.getState(), 20000, "getState");
+    if (state === "CONNECTED") {
+      failedChecks = 0;
+      return;
+    }
+    throw new Error(`estado ${state}`);
+  } catch (error) {
+    failedChecks += 1;
+    console.warn(`⚠️ Checagem da conexão falhou (${failedChecks}):`, error.message);
+    if (failedChecks >= 2) restart("conexão sem resposta");
+  }
+}, HEALTH_INTERVAL_MS);
 
 // ==================== START ====================
 console.log("🚀 Iniciando bot WhatsApp do Prumo...");
