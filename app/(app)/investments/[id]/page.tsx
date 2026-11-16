@@ -9,6 +9,10 @@ import { InvestmentEvolution } from "@/components/charts/investment-evolution";
 import { goalsOverview, type GoalOverview } from "@/lib/application/couple-data";
 import { loadAssetGoals, type AssetGoal } from "@/lib/application/goal-links";
 import { getHousehold } from "@/lib/application/household";
+import { valuation } from "@/lib/application/manual-investments";
+import { ratesSnapshot } from "@/lib/application/market-rates";
+import { deleteManualAction } from "@/app/(app)/investments/manual-actions";
+import { estimateAtMaturity, ratesFromSnapshot, termsFromRow, type RatesSnapshot } from "@/lib/domain/fixed-income";
 import { investmentForViewer, loadMovements, loadSnapshots, type InvestmentRow } from "@/lib/application/investments";
 import { requireUser } from "@/lib/auth/session";
 import { todayIn } from "@/lib/domain/dates";
@@ -60,6 +64,8 @@ export default async function InvestmentPage({ params, searchParams }: { params:
     .filter((c): c is { link: AssetGoal; goal: GoalOverview } => Boolean(c.goal));
 
   const fixed = assetClass(row.type, row.subtype) === "fixed";
+  // Today's rates, only to estimate the maturity of fixed income still open.
+  const rates = fixed && row.due_date && row.status !== "withdrawn" ? await ratesSnapshot().catch(() => null) : null;
   const withdrawn = row.status === "withdrawn";
   const g = gain(row.amount_cents, row.invested_cents);
   const since = heldSince(movements, row.issue_date);
@@ -130,9 +136,11 @@ export default async function InvestmentPage({ params, searchParams }: { params:
         )}
       </section>
 
-      {fixed ? <FixedLines row={row} since={since} today={today} /> : <VariableLines row={row} movements={movements} today={today} />}
+      {fixed ? <FixedLines row={row} since={since} today={today} rates={rates} /> : <VariableLines row={row} movements={movements} today={today} />}
 
       <GoalCards cards={goalCards} owner={owner} open={!withdrawn} investmentId={row.id} dueDate={row.due_date} />
+
+      {owner && row.source === "manual" && !withdrawn ? <ManualActions row={row} /> : null}
 
       {!fixed ? (
         <div className="flex items-start gap-2.5 rounded-xl border border-border bg-card px-4 py-3.5 text-[13px] leading-[19px] text-muted-foreground">
@@ -169,7 +177,18 @@ export default async function InvestmentPage({ params, searchParams }: { params:
 
       <div className="grid justify-items-center gap-1 py-1 text-center text-xs text-muted-foreground">
         {row.source === "pluggy" && row.synced_at ? <p>Atualizado pelo banco em {syncedFormat.format(new Date(row.synced_at)).replace(", ", " às ")}</p> : null}
-        {row.value_date ? <p>Valor informado pelo banco para {dateBR(row.value_date)}. Valores brutos, antes do IR.</p> : null}
+        {row.source === "pluggy" && row.value_date ? <p>Valor informado pelo banco para {dateBR(row.value_date)}. Valores brutos, antes do IR.</p> : null}
+        {row.source === "manual" ? (
+          <p>
+            Cadastrado por você.{" "}
+            {fixed
+              ? `Valor calculado pelo Prumo com as taxas do Banco Central${row.value_date ? ` até ${dateBR(row.value_date)}` : ""}.`
+              : row.value_date
+                ? `${row.type === "MUTUAL_FUND" ? "Valor" : "Cotação"} informado por você em ${dateBR(row.value_date)}.`
+                : ""}{" "}
+            Valores brutos, antes do IR.
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -191,7 +210,12 @@ function rateLabel(row: InvestmentRow): string | null {
   return null;
 }
 
-function FixedLines({ row, since, today }: { row: InvestmentRow; since: string | null; today: string }) {
+function FixedLines({ row, since, today, rates }: { row: InvestmentRow; since: string | null; today: string; rates: RatesSnapshot | null }) {
+  const terms = termsFromRow(row);
+  const atMaturity =
+    rates && terms && row.due_date && row.due_date > today && row.status !== "withdrawn"
+      ? estimateAtMaturity({ amountCents: row.amount_cents, investedCents: row.invested_cents ?? row.amount_cents, since: since ?? today, today, due: row.due_date, terms, rates: ratesFromSnapshot(rates), type: row.type, subtype: row.subtype })
+      : null;
   const g = gain(row.amount_cents, row.invested_cents);
   const net = netIfWithdrawn({ type: row.type, subtype: row.subtype, amountCents: row.amount_cents, investedCents: row.invested_cents, taxesCents: row.taxes_cents, since, today });
   const monthly = g && since && g.cents > 0 ? averageMonthlyGain(g.cents, since, today) : null;
@@ -212,6 +236,9 @@ function FixedLines({ row, since, today }: { row: InvestmentRow; since: string |
       {monthly !== null ? <Line label="Rende por mês, em média">≈ <Money cents={monthly} /></Line> : null}
       {rate ? <Line label="Taxa contratada">{rate}</Line> : null}
       {row.due_date ? <Line label="Vencimento">{dateBR(row.due_date)}</Line> : null}
+      {atMaturity ? (
+        <Line label={<>No vencimento <span className="text-xs">(estimativa{atMaturity.taxRate > 0 ? ", já descontado o IR" : ""})</span></>}>≈ <Money cents={atMaturity.netCents} /></Line>
+      ) : null}
     </section>
   );
 }
@@ -278,16 +305,26 @@ function Preferences({ row, hasPartner, partnerName, returnTo }: { row: Investme
           <Segment id={row.id} field="visibility" value={row.visibility} options={[["private", "Nada"], ["totals", "Só o total"], ["details", "Detalhes"]]} returnTo={returnTo} label={`O que ${partnerName} vê`} />
         </div>
       ) : null}
-      <form action={investmentPreferenceAction}>
-        <input type="hidden" name="id" value={row.id} />
-        <input type="hidden" name="field" value="include" />
-        <input type="hidden" name="value" value="false" />
-        <input type="hidden" name="returnTo" value="/investments" />
-        <button type="submit" className="flex min-h-11 w-full items-center justify-center rounded-full px-2 text-[15px] font-medium text-primary hover:text-primary-press">
-          Não trazer este investimento
-        </button>
-        <p className="text-center text-xs text-muted-foreground">Some das telas e dos totais. Dá para trazer de volta em Ajustes → Conexões.</p>
-      </form>
+      {row.source === "manual" ? (
+        <form action={deleteManualAction}>
+          <input type="hidden" name="id" value={row.id} />
+          <button type="submit" className="flex min-h-11 w-full items-center justify-center rounded-full px-2 text-[15px] font-medium text-primary hover:text-primary-press">
+            Apagar este investimento
+          </button>
+          <p className="text-center text-xs text-muted-foreground">Some das telas, dos totais e das metas.</p>
+        </form>
+      ) : (
+        <form action={investmentPreferenceAction}>
+          <input type="hidden" name="id" value={row.id} />
+          <input type="hidden" name="field" value="include" />
+          <input type="hidden" name="value" value="false" />
+          <input type="hidden" name="returnTo" value="/investments" />
+          <button type="submit" className="flex min-h-11 w-full items-center justify-center rounded-full px-2 text-[15px] font-medium text-primary hover:text-primary-press">
+            Não trazer este investimento
+          </button>
+          <p className="text-center text-xs text-muted-foreground">Some das telas e dos totais. Dá para trazer de volta em Ajustes → Conexões.</p>
+        </form>
+      )}
     </section>
   );
 }
@@ -340,5 +377,32 @@ function GoalCards({ cards, owner, open, investmentId, dueDate }: { cards: Array
         );
       })}
     </>
+  );
+}
+
+/** D4: movement buttons only on assets typed by hand; connected ones follow the bank. */
+function ManualActions({ row }: { row: InvestmentRow }) {
+  const how = valuation(row.type, row.subtype);
+  const href = (tipo: string) => `/investments/${row.id}/movement?tipo=${tipo}`;
+  const outline = "flex min-h-12 items-center justify-center rounded-full border border-foreground px-4 text-[15px] font-medium text-foreground no-underline hover:text-foreground";
+  const solid = "flex min-h-12 items-center justify-center rounded-full bg-primary px-4 text-[15px] font-medium text-primary-foreground no-underline hover:bg-primary-press hover:text-primary-foreground";
+  return (
+    <div className="grid gap-2.5">
+      <div className="grid grid-cols-2 gap-2.5">
+        {how === "quote" ? (
+          <>
+            <Link href={href("venda")} className={outline}>Registrar venda</Link>
+            <Link href={href("compra")} className={solid}>Registrar compra</Link>
+          </>
+        ) : (
+          <>
+            <Link href={href("resgate")} className={outline}>Resgatar</Link>
+            <Link href={href("aporte")} className={solid}>Registrar aporte</Link>
+          </>
+        )}
+      </div>
+      {how === "quote" ? <Link href={href("cotacao")} className="flex min-h-11 items-center justify-center text-[15px] font-medium text-primary hover:text-primary-press">Atualizar cotação</Link> : null}
+      {how === "total" ? <Link href={href("valor")} className="flex min-h-11 items-center justify-center text-[15px] font-medium text-primary hover:text-primary-press">Atualizar valor</Link> : null}
+    </div>
   );
 }

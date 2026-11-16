@@ -203,3 +203,76 @@ Plan and decisions: [INVESTMENTS_PLAN.md](../INVESTMENTS_PLAN.md).
 **Found while testing:**
 - A `CHECK` with `part_cents > 0` let a NULL part through; it is now `part_cents is not null and part_cents > 0`.
 - The dev server needed a restart to pick up a server action added while it ran.
+
+## Phase 4 — Manual investments and estimates (2026-11-16) · PASS
+
+### Delivered
+
+| Area | Files | Notes |
+| --- | --- | --- |
+| Public rates | `supabase/migrations/202611180001_market_rates.sql`, `lib/integrations/bcb.ts`, `lib/application/market-rates.ts` | Banco Central SGS series, stored in `market_rates` (server-only). See the details below. |
+| Valuation | `lib/domain/fixed-income.ts` | See the rules below. |
+| Manual investments | `lib/application/manual-investments.ts`, `app/(app)/investments/manual-actions.ts` | Create, record movements, change a price, delete, and revalue every day. See the details below. |
+| Screens | See the list below. | |
+
+**Public rates:**
+- Series used: CDI 12, Selic 11, IPCA 433, IPCA 12 months 13522.
+- History is fetched since 2018 the first time, then only new days, at most once an hour per process.
+- When the Banco Central fails, the stored rates are used.
+
+**Valuation rules:**
+- **Accrual:** once per business day.
+  - % of the CDI or of the Selic, by the day's rate;
+  - Prefixado: (1 + rate)^(1/252);
+  - IPCA+: the month's IPCA spread over its weekdays, plus the real rate.
+- **Holidays:** the weekdays without a published CDI.
+- **Days not published yet:** use the last known rate.
+- **Movements:** deposits earn from their day, withdrawals leave on their day.
+- **Maturity estimate:** today's rates (IPCA from the last 12 months), net of the regressive income tax for the whole period; LCI and LCA are exempt.
+
+**Manual investments:**
+- **Create:** kinds are CDB, Tesouro, LCI/LCA, stocks, real-estate funds, ETFs, funds and crypto. Creating one writes the first BUY, values the asset and can link it to a goal.
+- **Movements:**
+  - aporte and resgate for fixed income and funds;
+  - compra and venda for quoted assets;
+  - a new quote, or a new total for funds.
+- **Validation:** a withdrawal above today's value, or a sale above the quantity held, is refused.
+- **Fully sold:** the asset becomes withdrawn.
+- **Delete:** soft delete, which also removes the asset's goal links.
+- **Daily revaluation:** runs with the 15-minute sync cron, and the work happens once a day per asset. Each run also writes the day's snapshot.
+
+**Screens:**
+- `/investments/new` (InvNovo): "Importar do banco ou da corretora", the type grid, De quem é, institution, amount and date (or code, quantity and price), the yield (% do CDI, Selic for Tesouro, Prefixado or IPCA+) with maturity, and an optional goal. A live estimate reads "vira ≈ R$ X em <mês>, já descontado o IR".
+- `/investments/[id]/movement`: the movement form, only for manual assets.
+- **Asset detail:**
+  - movement buttons on manual assets (D4);
+  - "Apagar este investimento" on manual assets;
+  - a maturity estimate for any open fixed income with a contract, connected or manual;
+  - a footer that says where the value comes from.
+- **Portfolio:** a "+" in the header and "Cadastrar à mão" in the empty state.
+
+**Not done:**
+- Automatic quotes for stocks, real-estate funds, ETFs and crypto, the optional part of D5. The person updates the price; the screen says so.
+- The 1-year quote chart of InvAcao, which needs that provider.
+
+### Gates
+
+| Gate | Result |
+| --- | --- |
+| `npm run typecheck`, `npm run lint` | pass |
+| `npm test` | 123 tests pass, including 10 in `tests/fixed-income.test.ts` (CDI with holidays, unpublished days, prefixado over 252 days, withdrawals, IPCA+, maturity estimate with IR and LCI exemption) |
+| `npm run test:db` | 5 suites pass; `market_rates` is not readable by clients |
+| `npm run build` | pass |
+| Local Supabase with real Banco Central rates | See below. |
+
+**Checked on the local Supabase, with real Banco Central rates:**
+- **CDB:** R$ 3.000 at 110% of the CDI since 01/06/2026 is worth R$ 3.204,94 on 16/11 (about 15% a year).
+- **Deposit:** a deposit added exactly.
+- **Withdrawal:** one above the value was refused.
+- **Crypto:**
+  - it is valued at quantity × price, and a new quote revalued it;
+  - a sale above the quantity was refused;
+  - a full sale closed it.
+- **Daily job:** a second run did no work.
+- **Browser:** the form estimate showed ≈ R$ 3.291,14 for the same CDB held to 15/03/2027.
+- **Found:** a manual asset without movements would have been zeroed by the daily revaluation; it is now left as it is.

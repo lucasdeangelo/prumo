@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { PlusIcon } from "@/components/app/icons";
 import { SpaceSwitcher, UpdatedAt, PERSON_BG, PERSON_TINT } from "@/components/app/couple";
 import { AssetRow, ClassBreakdown, GainPill, GoalChip, HeroAmount, PeriodTabs } from "@/components/app/investments";
 import { Money } from "@/components/app/money";
@@ -61,7 +62,18 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
 
   return (
     <div className="grid gap-4">
-      <SpaceSwitcher space={shown} me={me} partner={partner} returnTo={href(period, filter)} hideValues />
+      <SpaceSwitcher
+        space={shown}
+        me={me}
+        partner={partner}
+        returnTo={href(period, filter)}
+        hideValues
+        trailing={
+          <Link href="/investments/new" aria-label="Novo investimento" className="-my-1 -mr-3 flex size-11 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-muted hover:text-foreground">
+            <PlusIcon className="size-[22px]" strokeWidth={1.8} />
+          </Link>
+        }
+      />
       {shown === "nosso" ? (
         partner ? (
           <NossoView
@@ -357,9 +369,14 @@ function Empty({ withdrawn }: { withdrawn: number }) {
         Os investimentos chegam pelo Open Finance, junto com suas contas.{withdrawn > 0 ? ` Por enquanto o banco mandou ${withdrawn === 1 ? "1 investimento já resgatado" : `${withdrawn} investimentos já resgatados`}.` : ""} Se você tem
         investimentos que não aparecem, confira no MeuPluggy se eles foram autorizados para o banco onde estão.
       </p>
-      <Link href="/settings/connections" className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full border border-foreground px-5 text-[14px] font-medium text-foreground hover:text-foreground">
-        Ver conexões
-      </Link>
+      <span className="mt-3 flex flex-wrap justify-center gap-2">
+        <Link href="/settings/connections" className="inline-flex min-h-11 items-center justify-center rounded-full border border-foreground px-5 text-[14px] font-medium text-foreground hover:text-foreground">
+          Ver conexões
+        </Link>
+        <Link href="/investments/new" className="inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-5 text-[14px] font-medium text-primary-foreground hover:bg-primary-press hover:text-primary-foreground">
+          Cadastrar à mão
+        </Link>
+      </span>
     </EmptyState>
   );
 }

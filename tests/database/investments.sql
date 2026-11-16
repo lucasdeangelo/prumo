@@ -95,7 +95,12 @@ select public.test_expect_fk_denied($$insert into public.investment_movements(us
 select public.test_expect_fk_denied($$insert into public.investment_snapshots(user_id, investment_id, on_date, amount_cents)
   values ('a7000000-0000-4000-8000-00000000000a', 'b7200000-0000-4000-8000-00000000000b', current_date - 1, 1)$$);
 
--- Direct writes stay closed for signed-in users and anonymous visitors.
+-- Direct writes stay closed for signed-in users and anonymous visitors; public rates are server-only.
+do $$ begin
+  if has_table_privilege('authenticated', 'public.market_rates', 'SELECT') or has_table_privilege('anon', 'public.market_rates', 'SELECT') then
+    raise exception 'market_rates exposed to clients';
+  end if;
+end $$;
 do $$
 declare t text;
 begin
