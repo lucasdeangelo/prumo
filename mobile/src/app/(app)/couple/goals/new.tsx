@@ -1,4 +1,5 @@
 import { formatBRL, parseBRL } from "@domain/money";
+import { useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { View } from "react-native";
 
@@ -8,16 +9,17 @@ import { Button, Field, FormMessage, Input, PageHeader, Segmented, Select, Stack
 import { Screen } from "@/ui/screen";
 import { colors, radius } from "@/ui/theme";
 
-type Data = { meName: string; partnerName: string | null; incomeShare: number | null };
+type Data = { meName: string; partnerName: string | null; incomeShare: number | null; defaultScope: "mine" | "ours" };
 
 const monthYear = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
 
 export default function NewGoal() {
+  const { de } = useLocalSearchParams<{ de?: string }>();
   return (
-    <Screen<Data> path="couple/goals/new" keyboard gap={16}>
+    <Screen<Data> path={de === "meu" ? "couple/goals/new?de=meu" : "couple/goals/new"} keyboard gap={16}>
       {(d) => (
         <>
-          <PageHeader title={d.partnerName ? "Nova meta do casal" : "Nova meta"} back="/couple/goals" />
+          <PageHeader title={d.defaultScope === "mine" ? "Nova meta" : d.partnerName ? "Nova meta do casal" : "Nova meta"} back={d.defaultScope === "mine" ? "/investments" : "/couple/goals"} />
           <GoalForm d={d} />
         </>
       )}
@@ -43,8 +45,11 @@ function deadlineOptions() {
   return list;
 }
 
-function GoalForm({ d }: { d: Data }) {
+function GoalForm({ d: data }: { d: Data }) {
   const { run, pending, state } = useAction("createGoal");
+  const [scope, setScope] = useState<"mine" | "ours">(data.defaultScope);
+  // A personal goal is only the person's: no split, no invite.
+  const d = { ...data, partnerName: scope === "ours" ? data.partnerName : null };
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("");
   const [method, setMethod] = useState<"percent" | "fixed">("percent");
@@ -61,7 +66,14 @@ function GoalForm({ d }: { d: Data }) {
 
   return (
     <Stack>
-      <Field label="Nome"><Input value={name} onChangeText={setName} maxLength={60} placeholder="Viagem de aniversário" /></Field>
+      {data.partnerName ? (
+        <View style={{ gap: 8 }}>
+          <Txt size={14} weight="medium">De quem é</Txt>
+          <Segmented value={scope} onChange={setScope} options={[{ value: "mine", label: "Minha" }, { value: "ours", label: "Do casal" }]} label="De quem é" />
+          <Txt size={13} color={colors.mutedForeground}>{scope === "mine" ? `Só você vê esta meta. ${data.partnerName} não fica sabendo dela.` : `${data.partnerName} vê a meta e confirma a própria parte.`}</Txt>
+        </View>
+      ) : null}
+      <Field label="Nome"><Input value={name} onChangeText={setName} maxLength={60} placeholder={scope === "mine" ? "Pós-graduação" : "Viagem de aniversário"} /></Field>
       <Field label="Ícone (opcional)"><Input value={icon} onChangeText={setIcon} maxLength={4} placeholder="✈️" /></Field>
       <Pair>
         <Field label="Valor-alvo"><Input value={target} onChangeText={setTarget} keyboardType="decimal-pad" placeholder="10.000,00" /></Field>
@@ -88,7 +100,7 @@ function GoalForm({ d }: { d: Data }) {
         </View>
       ) : null}
       <FormMessage state={state} />
-      <Button pending={pending} onPress={() => run({ name, icon, target, deadline, method: d.partnerName ? method : "percent", ...(d.partnerName ? { mine, theirs } : {}) })}>
+      <Button pending={pending} onPress={() => run({ name, icon, target, deadline, scope, method: d.partnerName ? method : "percent", ...(d.partnerName ? { mine, theirs } : {}) })}>
         {d.partnerName ? `Criar e convidar ${d.partnerName}` : "Criar meta"}
       </Button>
       {d.partnerName ? <Txt size={13} color={colors.mutedForeground} center>{d.partnerName} confirma a parte dele antes de a meta começar.</Txt> : null}

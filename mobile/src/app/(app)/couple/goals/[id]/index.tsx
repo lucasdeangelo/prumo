@@ -5,6 +5,7 @@ import { View } from "react-native";
 
 import { follow, useAction } from "@/lib/query";
 import { Avatar, SegmentBar } from "@/ui/finance";
+import { AssetRow, signedBRL, UP, DOWN, type AssetView } from "@/ui/investments";
 import { Button, Card, Field, Flex, FormMessage, Input, ListGroup, Notice, PageHeader, Row, SectionHeader, Stack, Txt } from "@/ui/kit";
 import { Screen } from "@/ui/screen";
 import { colors, PERSON_BG, radius, type Person } from "@/ui/theme";
@@ -29,6 +30,10 @@ type Data = {
   suggestion: string;
   contributionCount: number;
   timeline: TimelineItem[];
+  personal: boolean;
+  contributedCents: number;
+  earnedCents: number;
+  linked: AssetView[];
 };
 
 export default function GoalScreen() {
@@ -42,7 +47,7 @@ function GoalView({ d }: { d: Data }) {
   const together = d.people.length > 1;
   return (
     <>
-      <PageHeader title={d.title} subtitle={d.subtitle} back="/couple/goals" />
+      <PageHeader title={d.title} subtitle={d.subtitle} back={d.personal ? "/investments" : "/couple/goals"} />
 
       {d.waitingMe ? (
         <Card style={{ gap: 8 }}>
@@ -59,7 +64,24 @@ function GoalView({ d }: { d: Data }) {
           <Txt size={32} weight="medium" tabular tracking={-0.96} lh={40}>{formatBRL(d.savedCents)}</Txt>
           <Txt size={14} color={colors.mutedForeground}>de {formatBRL(d.targetCents)}</Txt>
         </Row>
-        <SegmentBar total={d.targetCents} label={`${d.progress.percent}% guardado`} segments={d.people.map((p) => ({ value: d.byUser[p.userId!] ?? 0, color: PERSON_BG[p.color] }))} />
+        {d.linked.length > 0 ? (
+          <>
+            {/* InvMeta: what was put in and what the money earned, in the same bar. */}
+            <SegmentBar total={d.targetCents} label={`Aplicado ${formatBRL(d.contributedCents)}, rendimento ${formatBRL(d.earnedCents)}`} segments={[{ value: d.contributedCents, color: "#1D4D3F" }, { value: Math.max(0, d.earnedCents), color: "#7FB89C" }]} />
+            <Row gap={10}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Row gap={6}><View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#1D4D3F" }} /><Txt size={12} color={colors.mutedForeground}>{d.personal ? "Você aplicou" : "Vocês aportaram"}</Txt></Row>
+                <Txt size={16} weight="medium" tabular>{formatBRL(d.contributedCents)}</Txt>
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Row gap={6}><View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#7FB89C" }} /><Txt size={12} color={colors.mutedForeground}>O dinheiro rendeu</Txt></Row>
+                <Txt size={16} weight="medium" tabular color={d.earnedCents >= 0 ? UP : DOWN}>{signedBRL(d.earnedCents)}</Txt>
+              </View>
+            </Row>
+          </>
+        ) : (
+          <SegmentBar total={d.targetCents} label={`${d.progress.percent}% guardado`} segments={d.people.map((p) => ({ value: d.byUser[p.userId!] ?? 0, color: PERSON_BG[p.color] }))} />
+        )}
         <Row style={{ justifyContent: "space-between" }}>
           {[25, 50, 75, 100].map((p) => <Txt key={p} size={12} weight={d.progress.percent >= p ? "medium" : "regular"} color={d.progress.percent >= p ? colors.foreground : colors.mutedForeground}>{p}%</Txt>)}
         </Row>
@@ -91,7 +113,24 @@ function GoalView({ d }: { d: Data }) {
         </Card>
       ) : null}
 
-      {d.status === "active" ? <Card><ContributeForm goalId={d.id} suggestion={d.suggestion} /></Card> : null}
+      <View style={{ gap: 8 }}>
+        <SectionHeader title="Investimentos vinculados" action={d.linked.length ? <Txt size={13} color={colors.mutedForeground}>{d.linked.length}</Txt> : undefined} />
+        {d.linked.length > 0 ? (
+          <ListGroup>{d.linked.map((a) => <AssetRow key={a.id} a={a} />)}</ListGroup>
+        ) : (
+          <Txt size={14} color={colors.mutedForeground} style={{ paddingHorizontal: 4 }}>Nenhum investimento conta para esta meta ainda. O valor de um investimento vinculado entra no progresso sozinho, com o que ele render.</Txt>
+        )}
+        {d.status === "active" || d.status === "pending" ? (
+          <Button variant="ghost" href={`/couple/goals/${d.id}/investments`}>{d.linked.length ? "+ Vincular outro investimento" : "+ Vincular um investimento"}</Button>
+        ) : null}
+      </View>
+
+      {d.status === "active" ? (
+        <Card style={{ gap: 8 }}>
+          <ContributeForm goalId={d.id} suggestion={d.suggestion} />
+          {d.linked.length > 0 ? <Txt size={13} color={colors.mutedForeground} center>Os investimentos vinculados já contam sozinhos. Registre aqui só o que guardou fora deles.</Txt> : null}
+        </Card>
+      ) : null}
 
       <View style={{ gap: 8 }}>
         <SectionHeader title="Aportes" action={<Txt size={13} color={colors.mutedForeground}>{d.contributionCount} no total</Txt>} />

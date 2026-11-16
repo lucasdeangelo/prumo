@@ -8,7 +8,7 @@ import { colors, PERSON_BG, radius, type Person, type PersonColor } from "@/ui/t
 
 type Progress = { percent: number; missingCents: number; reachMonth: string | null; monthsAhead: number | null; neededMonthlyCents: number | null; extraMonthlyCents: number };
 type Goal = { id: string; name: string; icon: string | null; status: "pending" | "active" | "done" | "archived"; deadlineLabel: string | null; savedCents: number; targetCents: number; byUser: Record<string, number>; progress: Progress; reachLabel: string | null; hasDeadline: boolean; completedLabel: string | null };
-type Data = { hasPartner: boolean; meColor: PersonColor; people: Person[]; savedCents: number; open: Goal[]; done: Goal[] };
+type Data = { hasPartner: boolean; meColor: PersonColor; people: Person[]; savedCents: number; open: Goal[]; done: Goal[]; personal: Goal[] };
 
 export default function Goals() {
   return (
@@ -55,6 +55,21 @@ export default function Goals() {
               </Press>
             ))}
           </View>
+
+          {d.personal.length > 0 ? (
+            <View style={{ gap: 8 }}>
+              <SectionHeader title={d.hasPartner ? "Só minhas" : "Metas pessoais"} action={d.hasPartner ? <Txt size={13} color={colors.mutedForeground}>{`${d.people.find((p) => p.color !== d.meColor)?.name ?? "Seu par"} não vê`}</Txt> : undefined} />
+              <ListGroup>
+                {d.personal.map((g) => (
+                  <Press key={g.id} href={`/couple/goals/${g.id}`} style={{ gap: 6, paddingHorizontal: 16, paddingVertical: 12 }} pressedStyle={{ backgroundColor: colors.rowPress }}>
+                    <Row style={{ justifyContent: "space-between" }}><Txt size={15} weight="medium" style={{ flex: 1 }}>{g.icon ? `${g.icon} ` : ""}{g.name}</Txt><Txt size={14} weight="medium" tabular>{g.progress.percent}%</Txt></Row>
+                    <SegmentBar total={g.targetCents} label={`${g.progress.percent}% guardado`} segments={[{ value: g.savedCents, color: PERSON_BG[d.meColor] }]} />
+                    <Txt size={13} color={colors.mutedForeground} tabular>{formatBRL(g.savedCents)} de {formatBRL(g.targetCents)}</Txt>
+                  </Press>
+                ))}
+              </ListGroup>
+            </View>
+          ) : null}
 
           {d.done.length > 0 ? (
             <View style={{ gap: 8 }}>

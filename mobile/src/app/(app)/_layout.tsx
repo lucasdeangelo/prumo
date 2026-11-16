@@ -8,18 +8,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchScreen } from "@/lib/api";
 import { prefetchScreen } from "@/lib/query";
 import { useSession } from "@/lib/session";
-import { CalendarIcon, CardIcon, HomeIcon, PlusIcon, RepeatIcon, SlidersIcon } from "@/ui/icons";
+import { CalendarIcon, CardIcon, HomeIcon, PlusIcon, RepeatIcon, TrendIcon } from "@/ui/icons";
 import { Txt } from "@/ui/kit";
 import { colors, fabShadow, spaceColor } from "@/ui/theme";
 
-// Navigation map: fixed bottom bar Início · Mês · Cartões · Assinaturas · Ajustes.
-// Upcoming bills live under Mês; tags and connections under Ajustes.
+// Navigation map: fixed bottom bar Início · Mês · Cartões · Assinaturas · Investimentos.
+// Upcoming bills live under Mês; Ajustes (tags, connections) opens from the gear on Início.
 const ITEMS = [
-  { href: "/overview", label: "Início", icon: HomeIcon, match: ["/overview"] },
+  { href: "/overview", label: "Início", icon: HomeIcon, match: ["/overview", "/settings"] },
   { href: "/monthly", label: "Mês", icon: CalendarIcon, match: ["/monthly", "/upcoming", "/transactions"] },
   { href: "/cards", label: "Cartões", icon: CardIcon, match: ["/cards"] },
   { href: "/subscriptions", label: "Assinaturas", icon: RepeatIcon, match: ["/subscriptions"] },
-  { href: "/settings", label: "Ajustes", icon: SlidersIcon, match: ["/settings"] },
+  { href: "/investments", label: "Investimentos", icon: TrendIcon, match: ["/investments"] },
 ] as const;
 
 export default function AppLayout() {
@@ -29,7 +29,7 @@ export default function AppLayout() {
   // Warm the main tabs right after sign-in so switching tabs is instant.
   useEffect(() => {
     const month = monthOf(todayIn());
-    for (const path of ["overview", `monthly/${month}`, "cards", "subscriptions", "settings"]) prefetchScreen(path, space).catch(() => {});
+    for (const path of ["overview", `monthly/${month}`, "cards", "subscriptions", "investments"]) prefetchScreen(path, space).catch(() => {});
   }, [space]);
 
   return (

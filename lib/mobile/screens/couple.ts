@@ -2,12 +2,13 @@ import "server-only";
 
 import { notFound, redirect } from "next/navigation";
 
-import { budgetOverview, freeMoneyFor, goalsOverview, loadAccounts, loadBudgets, loadCategoryNames, loadCoupleContext, loadFacts, loadSplitRules, toOwned } from "@/lib/application/couple-data";
+import { budgetOverview, findGoal, freeMoneyFor, goalsOverview, loadAccounts, loadBudgets, loadCategoryNames, loadCoupleContext, loadFacts, loadSplitRules, toOwned } from "@/lib/application/couple-data";
 import { ensureHousehold, freeMoneyAllowance, getHousehold, listProposals } from "@/lib/application/household";
 import { budgetSuggestion, listApprovals } from "@/lib/application/plans";
 import { listPrivacyRules } from "@/lib/application/privacy";
 import { loadRetro } from "@/lib/application/retro";
 import { requireUser } from "@/lib/auth/session";
+import { goalLinkedAssets } from "./investments";
 import { daysLeftInMonth, firstShare, sharePercentLabel } from "@/lib/domain/couple";
 import { addMonths, isMonthKey, monthBounds, todayIn } from "@/lib/domain/dates";
 import { centsToInput, formatBRL } from "@/lib/domain/money";
@@ -238,7 +239,7 @@ function goalPeople(household: NonNullable<Awaited<ReturnType<typeof getHousehol
 export async function goals() {
   const { user } = await requireUser();
   const household = await getHousehold(user.id);
-  const list = household ? await goalsOverview(household.id, todayIn()) : [];
+  const [list, personal] = household ? await Promise.all([goalsOverview(household.id, todayIn()), goalsOverview(household.id, todayIn(), { ownerId: user.id })]) : [[], []];
   const people = household ? goalPeople(household) : [];
   const view = (g: (typeof list)[number]) => ({
     id: g.id,
@@ -261,10 +262,12 @@ export async function goals() {
     savedCents: list.reduce((s, g) => s + g.savedCents, 0),
     open: list.filter((g) => g.status === "active" || g.status === "pending").map(view),
     done: list.filter((g) => g.status === "done").map(view),
+    // Only the owner ever receives these.
+    personal: personal.filter((g) => g.status === "active").map(view),
   };
 }
 
-export async function newGoal() {
+export async function newGoal(_: Record<string, string>, search: Record<string, string>) {
   const { user } = await requireUser();
   await ensureHousehold(user.id);
   const household = await getHousehold(user.id);
@@ -273,6 +276,7 @@ export async function newGoal() {
     meName: household?.me.name ?? "Você",
     partnerName: partner?.name ?? null,
     incomeShare: partner && household?.me.incomeCents && partner.incomeCents ? firstShare("income", [household.me.incomeCents, partner.incomeCents]) : null,
+    defaultScope: search.de === "meu" ? ("mine" as const) : ("ours" as const),
   };
 }
 
@@ -281,14 +285,16 @@ export async function goal({ id }: Record<string, string>) {
   const { user } = await requireUser();
   const household = await getHousehold(user.id);
   if (!household) notFound();
-  const found = (await goalsOverview(household.id, todayIn())).find((g) => g.id === id);
+  const found = await findGoal(household.id, user.id, id, todayIn());
   if (!found) notFound();
   const admin = createAdminClient();
-  const [{ data: contributions }, { data: milestones }] = await Promise.all([
+  const personal = found.scope === "mine";
+  const people = personal ? [household.me] : goalPeople(household);
+  const [{ data: contributions }, { data: milestones }, linked] = await Promise.all([
     admin.from("goal_contributions").select("id, user_id, amount_cents, contributed_on, automatic").eq("goal_id", id).order("contributed_on", { ascending: false }).limit(50),
     admin.from("goal_milestones").select("percent, reached_at").eq("goal_id", id),
+    goalLinkedAssets(id, [household.me.userId, household.partner?.userId].filter(Boolean) as string[], new Map(people.map((p) => [p.userId, p.name]))),
   ]);
-  const people = goalPeople(household);
   const myMember = found.members.find((m) => m.user_id === user.id);
   const plan = (userId: string) => {
     const member = found.members.find((m) => m.user_id === userId);
@@ -305,7 +311,11 @@ export async function goal({ id }: Record<string, string>) {
   return {
     id: found.id,
     title: `${found.icon ? `${found.icon} ` : ""}${found.name}`,
-    subtitle: found.deadline ? `Prazo: ${monthYear.format(new Date(`${found.deadline}T00:00:00Z`))}` : "Sem prazo",
+    subtitle: `${personal ? "Minha meta · só você vê · " : ""}${found.deadline ? `Prazo: ${monthYear.format(new Date(`${found.deadline}T00:00:00Z`))}` : "Sem prazo"}`,
+    personal,
+    contributedCents: found.contributedCents,
+    earnedCents: found.earnedCents,
+    linked,
     status: found.status,
     waitingMe: Boolean(found.status === "pending" && myMember && !myMember.confirmed_at),
     myPart: myMember?.percent !== null && myMember?.percent !== undefined ? `${Number(myMember.percent)}% do que for guardado` : `${formatBRL(myMember?.monthly_cents ?? 0)} por mês`,
@@ -330,9 +340,9 @@ export async function milestone({ id, pct }: Record<string, string>) {
   const { user } = await requireUser();
   const household = await getHousehold(user.id);
   if (!household) notFound();
-  const found = (await goalsOverview(household.id, todayIn())).find((g) => g.id === id);
+  const found = await findGoal(household.id, user.id, id, todayIn());
   if (!found) notFound();
-  const people = goalPeople(household);
+  const people = found.scope === "mine" ? [household.me] : goalPeople(household);
   const { count: linked } = await createAdminClient()
     .from("whatsapp_links")
     .select("user_id", { count: "exact", head: true })

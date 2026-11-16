@@ -463,3 +463,69 @@ export function evolution(snapshots: Snapshot[], today: string, period: "6m" | "
     label: monthly ? MONTH_SHORT[Number(p.date.slice(5, 7)) - 1] : `${p.date.slice(8, 10)}/${p.date.slice(5, 7)}`,
   }));
 }
+
+// ---------- Labels shared by the web and the app ----------
+
+const dateBR = (iso: string) => iso.split("-").reverse().join("/");
+
+export type DescribableAsset = {
+  type: string;
+  subtype: string | null;
+  quantity: number | null;
+  rate: number | null;
+  rate_type: string | null;
+  fixed_annual_rate: number | null;
+  due_date: string | null;
+  status: string;
+  institution: string | null;
+  issuer: string | null;
+};
+
+/** The contract in words: "110% do CDI", "IPCA + 6,5%", "Prefixado 12% a.a.". */
+export function rateText(row: Pick<DescribableAsset, "rate" | "rate_type" | "fixed_annual_rate">): string | null {
+  const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+  if (row.rate_type && row.rate !== null) {
+    if (row.rate_type === "IPCA" || row.rate_type === "IGPM") return `${row.rate_type} + ${fmt(row.fixed_annual_rate ?? row.rate)}%`;
+    return `${fmt(row.rate)}% do ${row.rate_type}`;
+  }
+  if (row.rate_type === "IPCA" && row.fixed_annual_rate !== null) return `IPCA + ${fmt(row.fixed_annual_rate)}%`;
+  if (row.fixed_annual_rate !== null) return `Prefixado ${fmt(row.fixed_annual_rate)}% a.a.`;
+  return null;
+}
+
+/** Second line of an asset: what it is in plain words (rate, maturity, quantity). */
+export function describeAsset(row: DescribableAsset): string {
+  if (row.status === "withdrawn") return "Resgatado";
+  const cls = assetClass(row.type, row.subtype);
+  const qty = row.quantity !== null ? row.quantity.toLocaleString("pt-BR", { maximumFractionDigits: 8 }) : null;
+  if (cls === "fixed") {
+    const parts = [
+      row.subtype === "TREASURY" ? "Tesouro Direto" : null,
+      row.subtype === "LCI" || row.subtype === "LCA" ? "Isenta de IR" : null,
+      rateText(row),
+      row.due_date ? `vence ${dateBR(row.due_date)}` : null,
+    ].filter(Boolean);
+    return parts.length ? parts.join(" · ") : "Renda fixa";
+  }
+  if (cls === "real_estate") return `Fundo imobiliário${qty ? ` · ${qty} cotas` : ""}`;
+  if (row.subtype === "STOCK") return `Ações${qty ? ` · ${qty} ações` : ""}`;
+  if (row.type === "ETF") return `ETF${qty ? ` · ${qty} cotas` : ""}`;
+  if (cls === "crypto") return `Cripto${qty ? ` · ${qty}` : ""}`;
+  if (cls === "equity") return `Renda variável${qty ? ` · ${qty}` : ""}`;
+  if (cls === "funds") return "Fundo de investimento";
+  if (cls === "pension") return "Previdência";
+  return row.institution ?? row.issuer ?? "Investimento";
+}
+
+export type ChipGoal = { goalId: string; name: string; scope: "mine" | "ours"; ownerId: string };
+
+/**
+ * "Meta do casal · Reserva", "Minha meta · Aposentadoria" or, for the owner of an open asset,
+ * "Sem meta · vincular". A personal goal is named only to its owner.
+ */
+export function goalChip(goals: ChipGoal[], viewerId: string, ownerId: string, open: boolean): { label: string; tone: "ours" | "mine" | "none" } | null {
+  const visible = goals.filter((g) => g.scope === "ours" || g.ownerId === viewerId);
+  if (visible.length === 0) return open && ownerId === viewerId ? { label: "Sem meta · vincular", tone: "none" } : null;
+  const first = visible[0];
+  return { label: `${first.scope === "ours" ? "Meta do casal" : "Minha meta"} · ${first.name}${visible.length > 1 ? ` +${visible.length - 1}` : ""}`, tone: first.scope === "ours" ? "ours" : "mine" };
+}

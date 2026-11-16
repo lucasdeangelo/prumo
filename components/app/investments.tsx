@@ -2,7 +2,9 @@
 import Link from "next/link";
 
 import { Money } from "@/components/app/money";
-import { assetBadge, assetClass, gain, type AssetClass } from "@/lib/domain/investments";
+import { assetBadge, assetClass, describeAsset, gain, goalChip, type AssetClass, type ChipGoal } from "@/lib/domain/investments";
+
+export { describeAsset };
 import { formatBRL } from "@/lib/domain/money";
 import type { InvestmentRow } from "@/lib/application/investments";
 import { cn } from "@/lib/utils";
@@ -90,41 +92,6 @@ function MoneyText({ text }: { text: string }) {
   );
 }
 
-const dateBR = (iso: string) => iso.split("-").reverse().join("/");
-
-function rateText(row: Pick<InvestmentRow, "rate" | "rate_type" | "fixed_annual_rate">): string | null {
-  const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
-  if (row.rate_type && row.rate !== null) {
-    if (row.rate_type === "IPCA" || row.rate_type === "IGPM") return `${row.rate_type} + ${fmt(row.fixed_annual_rate ?? row.rate)}%`;
-    return `${fmt(row.rate)}% do ${row.rate_type}`;
-  }
-  if (row.fixed_annual_rate !== null) return `Prefixado ${fmt(row.fixed_annual_rate)}% a.a.`;
-  return null;
-}
-
-/** Second line of an asset: what it is in plain words (rate, maturity, quantity). */
-export function describeAsset(row: Pick<InvestmentRow, "type" | "subtype" | "quantity" | "rate" | "rate_type" | "fixed_annual_rate" | "due_date" | "status" | "institution" | "issuer">): string {
-  if (row.status === "withdrawn") return "Resgatado";
-  const cls = assetClass(row.type, row.subtype);
-  const qty = row.quantity !== null ? row.quantity.toLocaleString("pt-BR", { maximumFractionDigits: 8 }) : null;
-  if (cls === "fixed") {
-    const parts = [
-      row.subtype === "TREASURY" ? "Tesouro Direto" : null,
-      row.subtype === "LCI" || row.subtype === "LCA" ? "Isenta de IR" : null,
-      rateText(row),
-      row.due_date ? `vence ${dateBR(row.due_date)}` : null,
-    ].filter(Boolean);
-    return parts.length ? parts.join(" · ") : "Renda fixa";
-  }
-  if (cls === "real_estate") return `Fundo imobiliário${qty ? ` · ${qty} cotas` : ""}`;
-  if (row.subtype === "STOCK") return `Ações${qty ? ` · ${qty} ações` : ""}`;
-  if (row.type === "ETF") return `ETF${qty ? ` · ${qty} cotas` : ""}`;
-  if (cls === "equity") return `Renda variável${qty ? ` · ${qty}` : ""}`;
-  if (cls === "funds") return "Fundo de investimento";
-  if (cls === "pension") return "Previdência";
-  return row.institution ?? row.issuer ?? "Investimento";
-}
-
 /** One line of the investment list: tile, name, what it is, value and gain. */
 export function AssetRow({ row, footnote }: { row: InvestmentRow; footnote?: React.ReactNode }) {
   const g = gain(row.amount_cents, row.invested_cents);
@@ -204,21 +171,13 @@ export function PeriodTabs({ value, hrefFor, options }: { value: string; hrefFor
   );
 }
 
-export type ChipGoal = { goalId: string; name: string; scope: "mine" | "ours"; ownerId: string };
+export type { ChipGoal };
 
-/**
- * "Meta do casal · Reserva", "Minha meta · Aposentadoria" or, for the owner, "Sem meta · vincular".
- * A personal goal shows only to its owner: the partner never learns its name.
- */
+/** The goal chip of an asset, as drawn on InvMeu and InvNosso. */
 export function GoalChip({ goals, viewerId, ownerId, open }: { goals: ChipGoal[]; viewerId: string; ownerId: string; open: boolean }) {
-  const visible = goals.filter((g) => g.scope === "ours" || g.ownerId === viewerId);
+  const chip = goalChip(goals, viewerId, ownerId, open);
+  if (!chip) return null;
   const icon = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3.5" /></svg>;
-  const base = "mt-1.5 inline-flex items-center gap-[5px] self-start whitespace-nowrap rounded-full py-[3px] pl-1.5 pr-2 text-[11px] font-medium";
-  if (visible.length === 0) {
-    if (!open || ownerId !== viewerId) return null;
-    return <span className={cn(base, "border border-dashed border-[#C9CCC6] text-muted-foreground")}>{icon}Sem meta · vincular</span>;
-  }
-  const first = visible[0];
-  const label = `${first.scope === "ours" ? "Meta do casal" : "Minha meta"} · ${first.name}${visible.length > 1 ? ` +${visible.length - 1}` : ""}`;
-  return <span className={cn(base, "max-w-full truncate", first.scope === "ours" ? "bg-[#E3EDE8] text-[#123329]" : "bg-[#E6ECF6] text-[#2B4579]")}>{icon}{label}</span>;
+  const tone = chip.tone === "ours" ? "bg-[#E3EDE8] text-[#123329]" : chip.tone === "mine" ? "bg-[#E6ECF6] text-[#2B4579]" : "border border-dashed border-[#C9CCC6] text-muted-foreground";
+  return <span className={cn("mt-1.5 inline-flex max-w-full items-center gap-[5px] self-start truncate whitespace-nowrap rounded-full py-[3px] pl-1.5 pr-2 text-[11px] font-medium", tone)}>{icon}{chip.label}</span>;
 }

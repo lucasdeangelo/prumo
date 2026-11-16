@@ -2,10 +2,11 @@ import { formatDayShort, formatMonthLong } from "@domain/dates";
 import { formatBRL } from "@domain/money";
 import { View } from "react-native";
 
-import { ChevronRightIcon } from "@/ui/icons";
+import { ChevronRightIcon, GearIcon } from "@/ui/icons";
 import { Amount, BalanceCard, CoupleAvatars, InstitutionMark, SegmentBar, SpaceSwitcher, UpdatedAt, VisibilityBadge } from "@/ui/finance";
 import { HomeAnalytics, type HomeAnalyticsView } from "@/ui/home";
-import { Button, Card, EmptyState, Flex, Label, ListGroup, Pill, Press, Row, SectionHeader, TextLink, Title, Txt, go } from "@/ui/kit";
+
+import { Button, Card, EmptyState, IconButton,Flex, Label, ListGroup, Pill, Press, Row, SectionHeader, TextLink, Title, Txt, go } from "@/ui/kit";
 import { Screen } from "@/ui/screen";
 import { colors, PERSON_BG, radius, type Person } from "@/ui/theme";
 
@@ -56,7 +57,7 @@ export default function Overview() {
     <Screen<Data> path="overview">
       {(d) => (
         <>
-          <SpaceSwitcher me={d.me} partner={d.partner} hideValues />
+          <SpaceSwitcher me={d.me} partner={d.partner} hideValues trailing={<IconButton href="/settings" label="Ajustes"><GearIcon size={22} /></IconButton>} />
           {d.mode === "invite" ? <InviteCard /> : d.mode === "nosso" ? <NossoHome d={d} n={d.nosso!} /> : <MeuHome d={d} m={d.meu!} />}
         </>
       )}

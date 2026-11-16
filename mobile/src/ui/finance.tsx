@@ -81,7 +81,7 @@ export function CoupleAvatars({ people, size = 36 }: { people: Pick<Person, "ini
 }
 
 /** 01 · Seletor de espaço: Meu | Nosso with the "who sees" caption. Switching is instant. */
-export function SpaceSwitcher({ me, partner, hideValues }: { me: Person; partner: Person | null; hideValues?: boolean }) {
+export function SpaceSwitcher({ me, partner, hideValues, trailing }: { me: Person; partner: Person | null; hideValues?: boolean; trailing?: React.ReactNode }) {
   const { space, setSpace } = useSession();
   const pair = partner ? (me.color === "blue" ? [me, partner] : [partner, me]) : [me];
   const caption = space === "nosso" ? `${pair.map((p) => p.name).join(" e ")} veem este espaço` : `Seu espaço. ${partner?.name ?? "Seu par"} só vê o que você compartilha.`;
@@ -99,7 +99,8 @@ export function SpaceSwitcher({ me, partner, hideValues }: { me: Person; partner
           })}
         </View>
         {space === "nosso" && partner ? <CoupleAvatars people={pair} size={32} /> : <Avatar person={me} size={32} />}
-        {hideValues ? <View style={{ marginLeft: -8, marginRight: -12 }}><HideValuesButton /></View> : null}
+        {hideValues ? <View style={{ marginLeft: -8, marginRight: trailing ? -8 : -12 }}><HideValuesButton /></View> : null}
+        {trailing ? <View style={{ marginRight: -12 }}>{trailing}</View> : null}
       </Row>
       <Txt size={13} color={colors.mutedForeground} style={{ paddingHorizontal: 4 }}>{caption}</Txt>
     </View>

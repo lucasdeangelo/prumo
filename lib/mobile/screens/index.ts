@@ -3,6 +3,7 @@ import "server-only";
 import * as cards from "./cards";
 import * as core from "./core";
 import * as couple from "./couple";
+import * as investments from "./investments";
 import * as settings from "./settings";
 
 type Loader = (params: Record<string, string>, search: Record<string, string>) => Promise<unknown>;
@@ -44,6 +45,12 @@ const ROUTES: Array<[string, Loader]> = [
   ["couple/goals/new", couple.newGoal],
   ["couple/goals/:id", couple.goal],
   ["couple/goals/:id/milestone/:pct", couple.milestone],
+  ["couple/goals/:id/investments", investments.goalInvestments],
+  ["investments", investments.investments],
+  ["investments/new", investments.newInvestment],
+  ["investments/:id", investments.investment],
+  ["investments/:id/link", investments.investmentLink],
+  ["investments/:id/movement", investments.investmentMovement],
   ["couple/retro/:month", couple.retro],
   ["privacy/preview", couple.privacyPreview],
   ["privacy/rules", couple.privacyRules],

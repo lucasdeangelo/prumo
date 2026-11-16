@@ -5,6 +5,8 @@ import * as cards from "@/app/(app)/cards/actions";
 import * as connect from "@/app/(app)/connect/actions";
 import * as couple from "@/app/(app)/couple-actions";
 import * as plan from "@/app/(app)/couple/plan-actions";
+import * as invest from "@/app/(app)/investments/actions";
+import * as manual from "@/app/(app)/investments/manual-actions";
 
 type Runner = (form: FormData, args: unknown[]) => Promise<unknown>;
 
@@ -64,6 +66,13 @@ export const MOBILE_ACTIONS = {
   markRetroPoint: form(plan.markRetroPointAction),
   finishRetro: form(plan.finishRetroAction),
   settleMonth: form(plan.settleMonthAction),
+  // Investimentos
+  investmentPreference: form(invest.investmentPreferenceAction),
+  linkInvestment: state(invest.linkInvestmentAction),
+  unlinkInvestment: form(invest.unlinkInvestmentAction),
+  createManualInvestment: state(manual.createManualInvestmentAction),
+  recordMovement: state(manual.recordMovementAction),
+  deleteManual: form(manual.deleteManualAction),
   // Cartões
   cycleOwner: form(cards.cycleOwnerAction),
   batchOwner: state(cards.batchOwnerAction),
