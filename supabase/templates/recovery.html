@@ -1,0 +1,10 @@
+<!-- Supabase · Authentication → Emails → "Reset password". Subject: "Criar nova senha no Prumo".
+     token_hash link: verified on the server (app/auth/confirm), so it works on any device or browser.
+     Needs Site URL = APP_URL. -->
+<div style="font-family: Geist, system-ui, -apple-system, Segoe UI, sans-serif; color: #121512; max-width: 480px; margin: 0 auto; padding: 32px 20px">
+  <p style="font-size: 24px; font-weight: 700; letter-spacing: -0.05em; color: #1D4D3F; margin: 0 0 24px">prumo</p>
+  <h1 style="font-size: 22px; font-weight: 500; margin: 0 0 8px">Criar nova senha</h1>
+  <p style="font-size: 15px; line-height: 22px; color: #5E625C; margin: 0 0 24px">Recebemos um pedido para trocar a senha da sua conta.</p>
+  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password" style="display: inline-block; background: #1D4D3F; color: #FFFFFF; text-decoration: none; font-size: 15px; font-weight: 500; padding: 14px 28px; border-radius: 999px">Criar nova senha</a>
+  <p style="font-size: 13px; line-height: 20px; color: #5E625C; margin: 24px 0 0">Se não foi você, ignore este e-mail. Sua senha continua a mesma.</p>
+</div>

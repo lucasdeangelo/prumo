@@ -244,6 +244,16 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
+# Prumo: token_hash links handled by app/auth/confirm (any device, web or app). The hosted project
+# uses the same HTML (Authentication → Emails), see docs/DEPLOY.md.
+[auth.email.template.confirmation]
+subject = "Confirme seu e-mail no Prumo"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Criar nova senha no Prumo"
+content_path = "./supabase/templates/recovery.html"
+
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"

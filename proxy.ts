@@ -32,7 +32,15 @@ export async function proxy(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
   const signedIn = Boolean(data?.claims?.sub);
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
+
+  // Supabase falls back to the Site URL ("/?code=…") when a redirect is not on its allow list:
+  // finish the confirmation where it belongs instead of showing the landing page.
+  if (pathname === "/" && (searchParams.has("code") || searchParams.has("token_hash"))) {
+    const confirm = request.nextUrl.clone();
+    confirm.pathname = "/auth/confirm";
+    return NextResponse.redirect(confirm);
+  }
 
   if (!signedIn && !isPublic(pathname)) {
     const login = request.nextUrl.clone();

@@ -95,6 +95,14 @@ Supabase › Authentication › **URL Configuration**:
 - Site URL: o `APP_URL`.
 - Redirect URLs: `APP_URL/**` (ex.: `https://prumo.seudominio.com.br/**`).
 
+Sem isso, o e-mail de confirmação aponta para o Site URL padrão (`http://localhost:3000`).
+
+Supabase › Authentication › **Emails** (modelos com link `token_hash`, que funcionam em qualquer
+aparelho, para contas criadas no web ou no app):
+
+- Confirm signup: assunto e HTML de `supabase/templates/confirmation.html`.
+- Reset password: assunto e HTML de `supabase/templates/recovery.html`.
+
 Opcional, mas recomendado: Authentication › SMTP Settings com um provedor de e-mail. O envio padrão do Supabase tem limite baixo por hora (confirmação de cadastro, recuperação de senha).
 
 As migrações já aplicadas continuam valendo. Para aplicar novas migrações a partir do Fedora, use `npx supabase db push` numa máquina com Node, ou rode do seu computador de desenvolvimento.
