@@ -12,6 +12,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { autoReconcileBills } from "./bills";
 import { applyAutoOurs } from "./cards";
 import { syncInvestments } from "./investments-sync";
+import { refreshMilestonesForOwner } from "./plans";
 import { applyRulesToRecent } from "./privacy";
 import { runSubscriptionDetection } from "./subscriptions";
 
@@ -231,6 +232,8 @@ export async function syncItem(userId: string, pluggyItemId: string) {
   let investments: { available: boolean; investments: number; movements: number; failed?: boolean };
   try {
     investments = await syncInvestments(userId, row.id as string, pluggyItemId);
+    // Values moved: a goal counting these investments may have reached a milestone.
+    if (investments.investments > 0) await refreshMilestonesForOwner(userId);
   } catch (error) {
     console.error("investments sync failed", error instanceof Error ? error.message : error);
     investments = { available: true, investments: 0, movements: 0, failed: true };

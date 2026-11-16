@@ -1,5 +1,6 @@
 import "server-only";
 
+import { assetsInCoupleGoals } from "@/lib/application/goal-links";
 import type { Household } from "@/lib/application/household";
 import { DomainError } from "@/lib/application/transactions";
 import type { Movement, MovementType, PortfolioItem, Snapshot } from "@/lib/domain/investments";
@@ -134,6 +135,8 @@ export async function investmentForViewer(userId: string, household: Household |
   const partnerId = household?.partner?.userId;
   if (!partnerId || row.user_id !== partnerId || !row.include) return null;
   if (row.scope === "ours" || (row.visibility === "details" && row.status !== "withdrawn")) return { row, owner: false };
+  // Counting for a couple goal shares the asset with both (the link screen says so).
+  if ((await assetsInCoupleGoals([row.id])).has(row.id)) return { row, owner: false };
   return null;
 }
 

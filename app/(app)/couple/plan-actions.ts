@@ -62,6 +62,7 @@ const goalSchema = z.object({
   method: z.enum(["percent", "fixed"]),
   mine: z.string().optional(),
   theirs: z.string().optional(),
+  scope: z.enum(["mine", "ours"]).optional(),
 });
 
 export async function createGoalAction(_: PlanState, formData: FormData): Promise<PlanState> {
@@ -75,7 +76,9 @@ export async function createGoalAction(_: PlanState, formData: FormData): Promis
   if (deadline && (!isIsoDate(deadline) || deadline <= todayIn())) return { error: "O prazo precisa ser um mês futuro." };
   let mine = 0;
   let theirs = 0;
-  if (d.method === "percent") {
+  if (d.scope === "mine") {
+    mine = 100;
+  } else if (d.method === "percent") {
     mine = Number(d.mine ?? 50);
     theirs = Number(d.theirs ?? 100 - mine);
     if (!Number.isFinite(mine) || !Number.isFinite(theirs) || Math.round(mine + theirs) !== 100) return { error: "Os percentuais precisam somar 100%." };
@@ -86,7 +89,7 @@ export async function createGoalAction(_: PlanState, formData: FormData): Promis
   }
   let id: string;
   try {
-    id = await createGoal(user.id, { name: d.name, icon: d.icon || null, targetCents: target, deadline, method: d.method, mine, theirs });
+    id = await createGoal(user.id, { name: d.name, icon: d.icon || null, targetCents: target, deadline, method: d.method, mine, theirs, scope: d.scope ?? "ours" });
   } catch (error) {
     return { error: friendly(error) };
   }

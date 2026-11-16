@@ -203,3 +203,22 @@ export function PeriodTabs({ value, hrefFor, options }: { value: string; hrefFor
     </nav>
   );
 }
+
+export type ChipGoal = { goalId: string; name: string; scope: "mine" | "ours"; ownerId: string };
+
+/**
+ * "Meta do casal · Reserva", "Minha meta · Aposentadoria" or, for the owner, "Sem meta · vincular".
+ * A personal goal shows only to its owner: the partner never learns its name.
+ */
+export function GoalChip({ goals, viewerId, ownerId, open }: { goals: ChipGoal[]; viewerId: string; ownerId: string; open: boolean }) {
+  const visible = goals.filter((g) => g.scope === "ours" || g.ownerId === viewerId);
+  const icon = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3.5" /></svg>;
+  const base = "mt-1.5 inline-flex items-center gap-[5px] self-start whitespace-nowrap rounded-full py-[3px] pl-1.5 pr-2 text-[11px] font-medium";
+  if (visible.length === 0) {
+    if (!open || ownerId !== viewerId) return null;
+    return <span className={cn(base, "border border-dashed border-[#C9CCC6] text-muted-foreground")}>{icon}Sem meta · vincular</span>;
+  }
+  const first = visible[0];
+  const label = `${first.scope === "ours" ? "Meta do casal" : "Minha meta"} · ${first.name}${visible.length > 1 ? ` +${visible.length - 1}` : ""}`;
+  return <span className={cn(base, "max-w-full truncate", first.scope === "ours" ? "bg-[#E3EDE8] text-[#123329]" : "bg-[#E6ECF6] text-[#2B4579]")}>{icon}{label}</span>;
+}

@@ -17,7 +17,10 @@ const monthOnly = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "U
 export default async function GoalsPage() {
   const { user } = await requireUser();
   const household = await getHousehold(user.id);
-  const goals = household ? await goalsOverview(household.id, todayIn()) : [];
+  const [goals, personal] = household
+    ? await Promise.all([goalsOverview(household.id, todayIn()), goalsOverview(household.id, todayIn(), { ownerId: user.id })])
+    : [[], []];
+  const personalOpen = personal.filter((g) => g.status === "active");
   const people = household?.partner ? (household.me.color === "blue" ? [household.me, household.partner] : [household.partner, household.me]) : household ? [household.me] : [];
   const open = goals.filter((g) => g.status === "active" || g.status === "pending");
   const done = goals.filter((g) => g.status === "done");
@@ -66,6 +69,23 @@ export default async function GoalsPage() {
           </li>
         ))}
       </ul>
+
+      {personalOpen.length > 0 ? (
+        <section className="grid gap-2">
+          <SectionHeader title={household?.partner ? "Só minhas" : "Metas pessoais"} action={household?.partner ? <span className="text-[13px] text-muted-foreground">{household.partner.name} não vê</span> : undefined} />
+          <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+            {personalOpen.map((g) => (
+              <li key={g.id}>
+                <Link href={`/couple/goals/${g.id}`} className="grid gap-1.5 px-4 py-3 text-foreground no-underline hover:text-foreground">
+                  <span className="flex items-center justify-between gap-3 text-[15px] font-medium"><span>{g.icon ? `${g.icon} ` : ""}{g.name}</span><span className="tabular text-sm font-medium">{g.progress.percent}%</span></span>
+                  <SegmentBar total={g.targetCents} label={`${g.progress.percent}% guardado`} segments={[{ value: g.savedCents, color: PERSON_BG[household?.me.color ?? "blue"] }]} />
+                  <span className="text-[13px] text-muted-foreground"><Money cents={g.savedCents} /> de <Money cents={g.targetCents} /></span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {done.length > 0 ? (
         <section className="grid gap-2">

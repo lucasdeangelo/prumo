@@ -126,3 +126,80 @@ Plan and decisions: [INVESTMENTS_PLAN.md](../INVESTMENTS_PLAN.md).
 - The CDB shows the estimated IR at 20% (259 days held).
 - The visibility choice saves and reverts.
 - At 375 px there is no horizontal scroll.
+
+## Phase 3 — Personal goals and investment links (2026-11-16) · PASS
+
+### Delivered
+
+| Area | Files | Notes |
+| --- | --- | --- |
+| Schema | `supabase/migrations/202611170001_goal_investments.sql` | `goals.scope` and the `goal_investments` table. See the details below. |
+| Progress | `lib/application/couple-data.ts`, `lib/application/goal-links.ts` | `goalsOverview` adds the linked value of today to deposits and splits it into put in and earned. |
+| Rules | `lib/application/plans.ts`, `lib/domain/investments.ts` | Personal goals, deposits measured with links, linking and unlinking, and milestones from investments. |
+| Screens | See the list below. | |
+
+**Schema:**
+- `goals.scope` is `ours` (default, existing goals) or `mine`. A personal goal stays in the owner's household and is readable only by its creator, through `can_see_goal()` in every goal policy.
+- `goal_investments` links an asset to a goal, whole (`all`) or as a part (`part` with `part_cents`). It is readable by whoever sees the goal, and written only by the service role.
+
+**Progress:**
+- `goalsOverview` without an owner returns the couple's goals; with `ownerId`, that person's goals.
+- `findGoal` returns either kind.
+- Per person, the split follows who owns each asset.
+
+**Rules:**
+- **Personal goals:** no invite and no confirmation; notices go only to the owner.
+- **Deposits:** measured against deposits plus links.
+- **Links:** the owner links one of their own assets to a goal they can see.
+  - "Tudo" excludes other goals.
+  - Parts together stay within the value today.
+- **Milestones from investments** (`newMilestones`):
+  - checked after each sync and after linking;
+  - recorded once and never taken back;
+  - only the highest one is announced.
+- **Sharing:** an asset counting for a couple goal becomes visible to the partner, as "Com detalhes".
+
+**Screens:**
+- **New goal:** a "De quem é" choice (Minha / Do casal); `?de=meu` opens it as personal.
+- **Goal detail (InvMeta):** the bar splits put in and earned, plus linked investments with owner and part, and "Vincular investimento". It warns that linked assets already count.
+- **Investment chooser:** `/couple/goals/[id]/investments`.
+- **Link screen (InvVincular):** `/investments/[id]/link`.
+  - lists "Minhas metas" and "Metas do casal";
+  - offers Tudo or Uma parte;
+  - warns before sharing with the partner;
+  - shows "Já conta para" with "Tirar da meta".
+- **Asset detail:** a goal card with progress, "Trocar", and a note when the asset matures before the goal's deadline. Without a goal, the owner sees "Sem meta · Vincular".
+- **Portfolio:**
+  - "Minhas metas" cards on Meu;
+  - "Por meta" with "Sem meta" on Nosso;
+  - goal chips on every asset ("Meta do casal · …", "Minha meta · …", "Sem meta · vincular").
+- **Goals list:** a "Só minhas" section.
+
+### Gates
+
+| Gate | Result |
+| --- | --- |
+| `npm run typecheck`, `npm run lint` | pass |
+| `npm test` | 113 tests pass, including milestones recorded once and couple-goal sharing |
+| `npm run test:db` | 5 suites pass, including the new `goal_investments.sql`. See the details below. |
+| `npm run build` | pass |
+| Browser, local Supabase | See below. |
+
+**`goal_investments.sql` covers:**
+- the partner never sees a personal goal, its members, deposits, milestones or links;
+- an outsider sees nothing;
+- link shape checks;
+- no direct writes;
+- the cascade on asset removal.
+
+**Checked in the browser (local Supabase):**
+- Created a personal goal and linked a Tesouro whole: put in R$ 8.000 + earned R$ 940.
+- A part larger than the asset was refused with a clear message; a valid part of a stock was accepted (goal 19%, earned includes the stock's loss share).
+- "Tudo" on an asset already partly linked was refused.
+- The couple-goal share warning shows.
+- Nosso "Por meta" matches the design line ("1 investimento · 62% de R$ 10.000 · +R$ 400 rendidos").
+- The personal goal does not appear in Nosso.
+
+**Found while testing:**
+- A `CHECK` with `part_cents > 0` let a NULL part through; it is now `part_cents is not null and part_cents > 0`.
+- The dev server needed a restart to pick up a server action added while it ran.

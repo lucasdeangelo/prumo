@@ -1,4 +1,11 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+
+import { PlusIcon } from "@/components/app/icons";
+import { AssetRow, GainText } from "@/components/app/investments";
+import { loadGoalLinks } from "@/lib/application/goal-links";
+import { loadInvestments } from "@/lib/application/investments";
+import { formatBRL } from "@/lib/domain/money";
 
 import { confirmGoalAction } from "@/app/(app)/couple/plan-actions";
 import { PageHeader, SectionHeader } from "@/components/app/bits";
@@ -8,7 +15,7 @@ import { Card } from "@/components/ui/card";
 import { SubmitButton } from "@/components/ui/form";
 import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
-import { goalsOverview } from "@/lib/application/couple-data";
+import { findGoal } from "@/lib/application/couple-data";
 import { getHousehold } from "@/lib/application/household";
 import { todayIn } from "@/lib/domain/dates";
 import { centsToInput } from "@/lib/domain/money";
@@ -25,14 +32,18 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
   const { user } = await requireUser();
   const household = await getHousehold(user.id);
   if (!household) notFound();
-  const goal = (await goalsOverview(household.id, todayIn())).find((g) => g.id === id);
+  const goal = await findGoal(household.id, user.id, id, todayIn());
   if (!goal) notFound();
   const admin = createAdminClient();
-  const [{ data: contributions }, { data: milestones }] = await Promise.all([
+  const memberIds = [household.me.userId, household.partner?.userId].filter(Boolean) as string[];
+  const [{ data: contributions }, { data: milestones }, linkedRows, links] = await Promise.all([
     admin.from("goal_contributions").select("id, user_id, amount_cents, contributed_on, automatic").eq("goal_id", id).order("contributed_on", { ascending: false }).limit(50),
     admin.from("goal_milestones").select("percent, reached_at").eq("goal_id", id),
+    goal.investmentIds.length ? loadInvestments(memberIds).then((rows) => rows.filter((r) => goal.investmentIds.includes(r.id))) : Promise.resolve([]),
+    loadGoalLinks([id]),
   ]);
-  const people = household.partner ? (household.me.color === "blue" ? [household.me, household.partner] : [household.partner, household.me]) : [household.me];
+  const personal = goal.scope === "mine";
+  const people = household.partner && !personal ? (household.me.color === "blue" ? [household.me, household.partner] : [household.partner, household.me]) : [household.me];
   const byId = new Map(people.map((p) => [p.userId, p]));
   const myMember = goal.members.find((m) => m.user_id === user.id);
   const waitingMe = goal.status === "pending" && myMember && !myMember.confirmed_at;
@@ -51,7 +62,7 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="grid gap-4">
-      <PageHeader title={`${goal.icon ? `${goal.icon} ` : ""}${goal.name}`} subtitle={goal.deadline ? `Prazo: ${monthYear.format(new Date(`${goal.deadline}T00:00:00Z`))}` : "Sem prazo"} back="/couple/goals" />
+      <PageHeader title={`${goal.icon ? `${goal.icon} ` : ""}${goal.name}`} subtitle={`${personal ? "Minha meta · só você vê · " : ""}${goal.deadline ? `Prazo: ${monthYear.format(new Date(`${goal.deadline}T00:00:00Z`))}` : "Sem prazo"}`} back={personal ? "/investments" : "/couple/goals"} />
 
       {waitingMe ? (
         <Card className="grid gap-2">
@@ -73,7 +84,28 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
           <span className="tabular text-[32px] font-medium tracking-[-0.03em]"><Money cents={goal.savedCents} /></span>
           <span className="text-sm text-muted-foreground">de <Money cents={goal.targetCents} /></span>
         </div>
-        <SegmentBar total={goal.targetCents} label={`${goal.progress.percent}% guardado`} segments={people.map((p) => ({ value: goal.byUser[p.userId] ?? 0, color: PERSON_BG[p.color] }))} />
+        {goal.investmentIds.length > 0 ? (
+          <>
+            {/* InvMeta: what was put in and what the money earned, in the same bar. */}
+            <SegmentBar
+              total={goal.targetCents}
+              label={`${personal ? "Aplicado" : "Aportado"} ${formatBRL(goal.contributedCents)}, rendimento ${formatBRL(goal.earnedCents)}, de ${formatBRL(goal.targetCents)}`}
+              segments={[{ value: goal.contributedCents, color: "#1D4D3F" }, { value: Math.max(0, goal.earnedCents), color: "#7FB89C" }]}
+            />
+            <div className="grid grid-cols-2 gap-2.5">
+              <span className="grid gap-0.5 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5"><span aria-hidden="true" className="size-2 rounded-full bg-[#1D4D3F]" />{personal ? "Você aplicou" : "Vocês aportaram"}</span>
+                <span className="tabular text-base font-medium text-foreground"><Money cents={goal.contributedCents} /></span>
+              </span>
+              <span className="grid gap-0.5 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5"><span aria-hidden="true" className="size-2 rounded-full bg-[#7FB89C]" />O dinheiro rendeu</span>
+                <span className="tabular text-base font-medium"><GainText cents={goal.earnedCents} /></span>
+              </span>
+            </div>
+          </>
+        ) : (
+          <SegmentBar total={goal.targetCents} label={`${goal.progress.percent}% guardado`} segments={people.map((p) => ({ value: goal.byUser[p.userId] ?? 0, color: PERSON_BG[p.color] }))} />
+        )}
         <div className="flex justify-between text-[12px] text-muted-foreground">{[25, 50, 75, 100].map((p) => <span key={p} className={goal.progress.percent >= p ? "font-medium text-foreground" : ""}>{p}%</span>)}</div>
         {people.length > 1 ? (
           <div className="grid grid-cols-2 gap-2">
@@ -103,8 +135,32 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
         </Card>
       ) : null}
 
+      <section className="grid gap-2">
+        <SectionHeader title="Investimentos vinculados" action={linkedRows.length ? <span className="text-[13px] text-muted-foreground">{linkedRows.length}</span> : undefined} />
+        {linkedRows.length > 0 ? (
+          <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+            {linkedRows.map((row) => {
+              const link = links.find((l) => l.investmentId === row.id);
+              const owner = people.length > 1 ? byId.get(row.user_id)?.name : null;
+              const note = [owner ? `De ${owner}` : null, link?.mode === "part" && link.partCents ? `conta ${formatBRL(Math.min(link.partCents, row.amount_cents))} para a meta` : null].filter(Boolean).join(" · ");
+              return <AssetRow key={row.id} row={row} footnote={note ? <span className="text-xs text-muted-foreground">{note}</span> : undefined} />;
+            })}
+          </ul>
+        ) : (
+          <p className="px-1 text-sm text-muted-foreground">Nenhum investimento conta para esta meta ainda. O valor de um investimento vinculado entra no progresso sozinho, com o que ele render.</p>
+        )}
+        {goal.status === "active" || goal.status === "pending" ? (
+          <Link href={`/couple/goals/${goal.id}/investments`} className="flex min-h-11 items-center justify-center gap-1.5 text-[15px] font-medium text-primary hover:text-primary-press">
+            <PlusIcon className="size-4" strokeWidth={1.8} />{linkedRows.length ? "Vincular outro investimento" : "Vincular um investimento"}
+          </Link>
+        ) : null}
+      </section>
+
       {goal.status === "active" ? (
-        <Card><ContributeForm goalId={goal.id} suggestion={suggestion ? centsToInput(suggestion) : ""} /></Card>
+        <Card className="grid gap-2">
+          <ContributeForm goalId={goal.id} suggestion={suggestion ? centsToInput(suggestion) : ""} />
+          {goal.investmentIds.length > 0 ? <p className="text-center text-[13px] text-muted-foreground">Os investimentos vinculados já contam sozinhos. Registre aqui só o que guardou fora deles.</p> : null}
+        </Card>
       ) : null}
 
       <section className="grid gap-2">

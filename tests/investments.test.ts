@@ -16,6 +16,7 @@ import {
   movementFromProvider,
   netIfWithdrawn,
   type Movement,
+  newMilestones,
   type PortfolioItem,
   type Snapshot,
   evolution,
@@ -305,5 +306,27 @@ describe("portfolio", () => {
     // a: gain 3.000 now − 2.000 at 31/10 = 1.000; b: −1.500 − 0 = −1.500.
     expect(gainSince(withB, items, "2026-11-01")).toBe(-500);
     expect(gainSince([], items, "2026-11-01")).toBeNull();
+  });
+});
+
+describe("goals with investments", () => {
+  it("records each milestone once and never takes one back", () => {
+    expect(newMilestones(1000000, 520000, [])).toEqual([25, 50]);
+    expect(newMilestones(1000000, 520000, [25])).toEqual([50]);
+    // The value dropped below 50% after it was reached: nothing new, nothing removed.
+    expect(newMilestones(1000000, 400000, [25, 50])).toEqual([]);
+    expect(newMilestones(1000000, 1000000, [25, 50, 75])).toEqual([100]);
+  });
+
+  it("shares with the partner an asset that counts for a couple goal", () => {
+    const base = { ownerId: "ana", type: "EQUITY", subtype: "STOCK", investedCents: 1, status: "active" as const, scope: "mine" as const };
+    const items: PortfolioItem[] = [
+      { ...base, id: "private-in-goal", amountCents: 1000, visibility: "private" },
+      { ...base, id: "private", amountCents: 500, visibility: "private" },
+    ];
+    expect(partnerInvestmentsView(items).totalCents).toBeNull();
+    const view = partnerInvestmentsView(items, new Set(["private-in-goal"]));
+    expect(view.totalCents).toBe(1000);
+    expect(view.assets.map((a) => a.id)).toEqual(["private-in-goal"]);
   });
 });

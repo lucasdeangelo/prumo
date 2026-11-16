@@ -1,11 +1,12 @@
 import Link from "next/link";
 
 import { SpaceSwitcher, UpdatedAt, PERSON_BG, PERSON_TINT } from "@/components/app/couple";
-import { AssetRow, ClassBreakdown, GainPill, HeroAmount, PeriodTabs } from "@/components/app/investments";
+import { AssetRow, ClassBreakdown, GainPill, GoalChip, HeroAmount, PeriodTabs } from "@/components/app/investments";
 import { Money } from "@/components/app/money";
 import { InvestmentEvolution } from "@/components/charts/investment-evolution";
 import { Card, EmptyState } from "@/components/ui/card";
-import { lastSyncAt } from "@/lib/application/couple-data";
+import { goalsOverview, lastSyncAt, type GoalOverview } from "@/lib/application/couple-data";
+import { loadAssetGoals } from "@/lib/application/goal-links";
 import { getHousehold } from "@/lib/application/household";
 import { loadIncome, loadInvestments, loadSnapshots, toPortfolioItem, type InvestmentRow } from "@/lib/application/investments";
 import { requireUser } from "@/lib/auth/session";
@@ -41,8 +42,17 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
   const partner = household?.partner ?? null;
   const shown = space === "nosso" ? "nosso" : "meu";
   const memberIds = [user.id, partner?.userId].filter(Boolean) as string[];
-  const [rows, syncedAt] = await Promise.all([loadInvestments(memberIds), lastSyncAt(memberIds)]);
   const today = todayIn();
+  const [rows, syncedAt, ourGoals, myGoals] = await Promise.all([
+    loadInvestments(memberIds),
+    lastSyncAt(memberIds),
+    household ? goalsOverview(household.id, today) : Promise.resolve([]),
+    household ? goalsOverview(household.id, today, { ownerId: user.id }) : Promise.resolve([]),
+  ]);
+  const assetGoals = await loadAssetGoals(rows.map((r) => r.id));
+  // An asset counting for a couple goal is shared with both on purpose.
+  const inCoupleGoals = new Set([...assetGoals].filter(([, list]) => list.some((g) => g.scope === "ours")).map(([id]) => id));
+  const chip: ChipFor = (r) => <GoalChip goals={assetGoals.get(r.id) ?? []} viewerId={user.id} ownerId={r.user_id} open={isOpen(r)} />;
 
   // Meu: what is mine and not shared. Nosso: what either of us marked as the couple's.
   const mine = rows.filter((r) => r.user_id === user.id && (!partner || r.scope === "mine"));
@@ -59,7 +69,9 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
             meName={me.name}
             partnerName={partner.name}
             myTotal={portfolioSummary(mine.map(toPortfolioItem)).totalCents}
-            partnerView={partnerInvestmentsView(partnerMine.map(toPortfolioItem))}
+            partnerView={partnerInvestmentsView(partnerMine.map(toPortfolioItem), inCoupleGoals)}
+            goals={ourGoals}
+            chip={chip}
             partnerRows={partnerMine}
             partnerId={partner.userId}
             period={period}
@@ -75,18 +87,20 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
           </Card>
         )
       ) : (
-        <MeuView rows={mine} color={me.color} partnerName={partner?.name ?? null} period={period} filter={filter} today={today} syncedAt={syncedAt} />
+        <MeuView rows={mine} color={me.color} partnerName={partner?.name ?? null} period={period} filter={filter} today={today} syncedAt={syncedAt} goals={myGoals} inCoupleGoals={inCoupleGoals} chip={chip} />
       )}
     </div>
   );
 }
 
-async function MeuView({ rows, color, partnerName, period, filter, today, syncedAt }: { rows: InvestmentRow[]; color: "blue" | "terracotta"; partnerName: string | null; period: Period; filter: Filter; today: string; syncedAt: string | null }) {
+type ChipFor = (row: InvestmentRow) => React.ReactNode;
+
+async function MeuView({ rows, color, partnerName, period, filter, today, syncedAt, goals, inCoupleGoals, chip }: { rows: InvestmentRow[]; color: "blue" | "terracotta"; partnerName: string | null; period: Period; filter: Filter; today: string; syncedAt: string | null; goals: GoalOverview[]; inCoupleGoals: Set<string>; chip: ChipFor }) {
   const open = rows.filter(isOpen);
   const summary = portfolioSummary(rows.map(toPortfolioItem));
   const snapshots = await loadSnapshots(open.map((r) => r.id));
   const points = evolution(snapshots, today, period);
-  const seen = partnerInvestmentsView(rows.map(toPortfolioItem));
+  const seen = partnerInvestmentsView(rows.map(toPortfolioItem), inCoupleGoals);
   const seenText = !partnerName
     ? null
     : seen.totalCents === null
@@ -108,7 +122,8 @@ async function MeuView({ rows, color, partnerName, period, filter, today, synced
       {open.length === 0 ? (
         <>
           <Empty withdrawn={rows.length - open.length} />
-          {rows.length > 0 ? <AssetList rows={rows} filter="todos" period={period} showFilter={false} /> : null}
+          <MyGoals goals={goals} color={color} />
+          {rows.length > 0 ? <AssetList rows={rows} filter="todos" period={period} showFilter={false} chip={chip} /> : null}
         </>
       ) : (
         <>
@@ -129,7 +144,8 @@ async function MeuView({ rows, color, partnerName, period, filter, today, synced
           </section>
           <Evolution points={points} period={period} filter={filter} valueLabel="Patrimônio" />
           <ClassBreakdown classes={summary.classes} />
-          <AssetList rows={rows} filter={filter} period={period} showFilter={false} />
+          <MyGoals goals={goals} color={color} />
+          <AssetList rows={rows} filter={filter} period={period} showFilter={false} chip={chip} />
         </>
       )}
       <Footer syncedAt={syncedAt} />
@@ -149,6 +165,8 @@ async function NossoView({
   filter,
   today,
   syncedAt,
+  goals,
+  chip,
 }: {
   rows: InvestmentRow[];
   meName: string;
@@ -161,6 +179,8 @@ async function NossoView({
   filter: Filter;
   today: string;
   syncedAt: string | null;
+  goals: GoalOverview[];
+  chip: ChipFor;
 }) {
   const open = rows.filter(isOpen);
   const summary = portfolioSummary(rows.map(toPortfolioItem));
@@ -199,7 +219,8 @@ async function NossoView({
           </section>
           <Evolution points={points} period={period} filter={filter} valueLabel="Patrimônio" />
           <ClassBreakdown classes={summary.classes} note={open.length === 1 ? "1 investimento" : `${open.length} investimentos`} />
-          <AssetList rows={rows} filter={filter} period={period} showFilter partnerId={partnerId} partnerName={partnerName} meName={meName} />
+          <ByGoal goals={goals} rows={rows} />
+          <AssetList rows={rows} filter={filter} period={period} showFilter partnerId={partnerId} partnerName={partnerName} meName={meName} chip={chip} />
         </>
       )}
       <section className="grid gap-2">
@@ -219,7 +240,7 @@ async function NossoView({
         </ul>
         {sharedDetails.length > 0 ? (
           <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
-            {sharedDetails.map((r) => <AssetRow key={r.id} row={r} footnote={<span className="text-xs text-muted-foreground">De {partnerName} · com detalhes</span>} />)}
+            {sharedDetails.map((r) => <AssetRow key={r.id} row={r} footnote={<><span className="text-xs text-muted-foreground">De {partnerName}</span>{chip(r)}</>} />)}
           </ul>
         ) : null}
       </section>
@@ -267,6 +288,7 @@ function AssetList({
   partnerId,
   partnerName,
   meName,
+  chip,
 }: {
   rows: InvestmentRow[];
   filter: Filter;
@@ -275,6 +297,7 @@ function AssetList({
   partnerId?: string;
   partnerName?: string;
   meName?: string;
+  chip: ChipFor;
 }) {
   const open = rows.filter(isOpen);
   const visible = open.filter((r) => {
@@ -310,7 +333,7 @@ function AssetList({
       ) : null}
       {visible.length > 0 ? (
         <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
-          {visible.map((r) => <AssetRow key={r.id} row={r} footnote={owner(r) ? <span className="text-xs text-muted-foreground">De {owner(r)}</span> : undefined} />)}
+          {visible.map((r) => <AssetRow key={r.id} row={r} footnote={<>{owner(r) ? <span className="text-xs text-muted-foreground">De {owner(r)}</span> : null}{chip(r)}</>} />)}
         </ul>
       ) : open.length > 0 ? (
         <EmptyState title={filter === "fixa" ? "Nenhum investimento de renda fixa" : "Nenhum investimento de renda variável"} />
@@ -347,5 +370,75 @@ function Footer({ syncedAt }: { syncedAt: string | null }) {
       <UpdatedAt at={syncedAt} />
       <p className="text-xs text-muted-foreground">Valores brutos, antes do IR. Ações e fundos mudam todo dia.</p>
     </div>
+  );
+}
+
+const monthYearShort = new Intl.DateTimeFormat("pt-BR", { month: "short", year: "numeric", timeZone: "UTC" });
+const shortMonth = (deadline: string) => monthYearShort.format(new Date(`${deadline}T00:00:00Z`)).replace(". de ", "/").replace(" de ", "/");
+
+/** "Minhas metas" (InvMeu): personal goals, only ever shown to their owner. */
+function MyGoals({ goals, color }: { goals: GoalOverview[]; color: "blue" | "terracotta" }) {
+  const open = goals.filter((g) => g.status === "active");
+  return (
+    <section className="grid gap-2.5">
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-base font-semibold">Minhas metas</h2>
+        <Link href="/couple/goals/new?de=meu" className="text-[15px] font-medium text-primary hover:text-primary-press">Nova meta</Link>
+      </div>
+      {open.length === 0 ? (
+        <p className="px-1 text-[13px] text-muted-foreground">Aposentadoria, curso, um sonho só seu: crie uma meta e faça seus investimentos contarem para ela.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2.5">
+          {open.map((g) => (
+            <Link key={g.id} href={`/couple/goals/${g.id}`} className="grid content-start gap-2 rounded-2xl border border-border bg-card p-3.5 text-foreground no-underline hover:text-foreground">
+              <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: color === "blue" ? "#2B4579" : "#8A4320" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3.5" /></svg>
+                <span className="truncate">{g.name}</span>
+              </span>
+              <span className="tabular text-lg font-medium"><Money cents={g.savedCents} /></span>
+              <span aria-hidden="true" className="h-1.5 overflow-hidden rounded-full bg-border"><span className="block h-full rounded-full" style={{ width: `${Math.min(100, g.progress.percent)}%`, background: PERSON_BG[color] }} /></span>
+              <span className="tabular text-xs text-muted-foreground">{g.progress.percent}% de <Money cents={g.targetCents} />{g.deadline ? ` · ${shortMonth(g.deadline)}` : ""}</span>
+              {g.earnedCents > 0 ? <span className="tabular text-xs text-[#2B7350]">+<Money cents={g.earnedCents} /> rendidos</span> : null}
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** "Por meta" (InvNosso): couple goals with what counts for them, then what is free. */
+function ByGoal({ goals, rows }: { goals: GoalOverview[]; rows: InvestmentRow[] }) {
+  const open = goals.filter((g) => g.status === "active" || g.status === "pending");
+  const linked = new Set(open.flatMap((g) => g.investmentIds));
+  const free = rows.filter((r) => isOpen(r) && !linked.has(r.id));
+  if (open.length === 0) return null;
+  return (
+    <section className="grid gap-2.5">
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-base font-semibold">Por meta</h2>
+        <Link href="/couple/goals" className="text-[15px] font-medium text-primary hover:text-primary-press">Metas</Link>
+      </div>
+      <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+        {open.map((g) => (
+          <li key={g.id}>
+            <Link href={`/couple/goals/${g.id}`} className="grid gap-1.5 px-4 py-3.5 text-foreground no-underline hover:bg-[#F8F9F6] hover:text-foreground">
+              <span className="flex items-center justify-between gap-3 text-[13px] font-medium"><span className="truncate">{g.name}</span><span className="tabular"><Money cents={g.savedCents} /></span></span>
+              <span aria-hidden="true" className="h-1.5 overflow-hidden rounded-full bg-border"><span className="block h-full rounded-full bg-primary" style={{ width: `${Math.min(100, g.progress.percent)}%` }} /></span>
+              <span className="text-xs text-muted-foreground">
+                {g.investmentIds.length === 0 ? "Sem investimentos" : g.investmentIds.length === 1 ? "1 investimento" : `${g.investmentIds.length} investimentos`} · {g.progress.percent}% de <Money cents={g.targetCents} />
+                {g.earnedCents > 0 ? <> · <span className="text-[#2B7350]">+<Money cents={g.earnedCents} /> rendidos</span></> : null}
+              </span>
+            </Link>
+          </li>
+        ))}
+        {free.length > 0 ? (
+          <li className="grid gap-0.5 px-4 py-3.5">
+            <span className="flex items-center justify-between gap-3 text-[13px] font-medium"><span>Sem meta</span><span className="tabular"><Money cents={free.reduce((s, r) => s + r.amount_cents, 0)} /></span></span>
+            <span className="text-xs text-muted-foreground">{free.slice(0, 3).map((r) => r.name).join(", ")}{free.length > 3 ? "…" : ""} · livres para resgatar ou vincular</span>
+          </li>
+        ) : null}
+      </ul>
+    </section>
   );
 }

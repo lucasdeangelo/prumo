@@ -362,12 +362,22 @@ export function portfolioSummary(items: PortfolioItem[]) {
  * for them, not even inside a total; "Só totais" adds to the total only; "Com detalhes" also shows
  * the asset. Anything dropped here never leaves the server.
  */
-export function partnerInvestmentsView(items: PortfolioItem[]) {
-  const shown = items.filter((i) => isOpen(i) && i.scope === "mine" && i.visibility !== "private");
+export function partnerInvestmentsView(items: PortfolioItem[], inCoupleGoals: Set<string> = new Set()) {
+  // Counting for a couple goal shares the asset on purpose: the partner sees it like "Com detalhes".
+  const level = (i: PortfolioItem) => (inCoupleGoals.has(i.id) ? "details" : i.visibility);
+  const shown = items.filter((i) => isOpen(i) && i.scope === "mine" && level(i) !== "private");
   return {
     totalCents: shown.length > 0 ? shown.reduce((s, i) => s + i.amountCents, 0) : null,
-    assets: shown.filter((i) => i.visibility === "details"),
+    assets: shown.filter((i) => level(i) === "details"),
   };
+}
+
+/**
+ * Milestones a goal has reached and not recorded yet. Used when the value moves on its own
+ * (investments), so a drop never "un-reaches" one and each is recorded once.
+ */
+export function newMilestones(targetCents: number, savedCents: number, recorded: number[]): Array<25 | 50 | 75 | 100> {
+  return ([25, 50, 75, 100] as const).filter((p) => savedCents * 100 >= targetCents * p && !recorded.includes(p));
 }
 
 export type Snapshot = { investmentId: string; date: string; amountCents: number; investedCents: number | null };

@@ -6,6 +6,8 @@ import { PERSON_BG, PERSON_TINT } from "@/components/app/couple";
 import { AssetTile, GainPill, GainText, HeroAmount, PeriodTabs, describeAsset } from "@/components/app/investments";
 import { Money } from "@/components/app/money";
 import { InvestmentEvolution } from "@/components/charts/investment-evolution";
+import { goalsOverview, type GoalOverview } from "@/lib/application/couple-data";
+import { loadAssetGoals, type AssetGoal } from "@/lib/application/goal-links";
 import { getHousehold } from "@/lib/application/household";
 import { investmentForViewer, loadMovements, loadSnapshots, type InvestmentRow } from "@/lib/application/investments";
 import { requireUser } from "@/lib/auth/session";
@@ -44,7 +46,18 @@ export default async function InvestmentPage({ params, searchParams }: { params:
   if (!found) notFound();
   const { row, owner } = found;
   const today = todayIn();
-  const [movements, snapshots] = await Promise.all([loadMovements(row.id), loadSnapshots([row.id])]);
+  const [movements, snapshots, assetGoals, ourGoals, myGoals] = await Promise.all([
+    loadMovements(row.id),
+    loadSnapshots([row.id]),
+    loadAssetGoals([row.id]).then((m) => m.get(row.id) ?? []),
+    household ? goalsOverview(household.id, todayIn()) : Promise.resolve([]),
+    household ? goalsOverview(household.id, todayIn(), { ownerId: user.id }) : Promise.resolve([]),
+  ]);
+  // The partner never learns about a personal goal; the owner sees all of theirs.
+  const goalCards = assetGoals
+    .filter((g) => g.scope === "ours" || g.ownerId === user.id)
+    .map((g) => ({ link: g, goal: [...ourGoals, ...myGoals].find((o) => o.id === g.goalId) }))
+    .filter((c): c is { link: AssetGoal; goal: GoalOverview } => Boolean(c.goal));
 
   const fixed = assetClass(row.type, row.subtype) === "fixed";
   const withdrawn = row.status === "withdrawn";
@@ -118,6 +131,8 @@ export default async function InvestmentPage({ params, searchParams }: { params:
       </section>
 
       {fixed ? <FixedLines row={row} since={since} today={today} /> : <VariableLines row={row} movements={movements} today={today} />}
+
+      <GoalCards cards={goalCards} owner={owner} open={!withdrawn} investmentId={row.id} dueDate={row.due_date} />
 
       {!fixed ? (
         <div className="flex items-start gap-2.5 rounded-xl border border-border bg-card px-4 py-3.5 text-[13px] leading-[19px] text-muted-foreground">
@@ -274,5 +289,56 @@ function Preferences({ row, hasPartner, partnerName, returnTo }: { row: Investme
         <p className="text-center text-xs text-muted-foreground">Some das telas e dos totais. Dá para trazer de volta em Ajustes → Conexões.</p>
       </form>
     </section>
+  );
+}
+
+const monthYear = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
+
+/** InvCDB / InvAcao: the goal this asset counts for, or the invitation to link one. */
+function GoalCards({ cards, owner, open, investmentId, dueDate }: { cards: Array<{ link: AssetGoal; goal: GoalOverview }>; owner: boolean; open: boolean; investmentId: string; dueDate: string | null }) {
+  const icon = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3.5" /></svg>;
+  if (cards.length === 0) {
+    if (!owner || !open) return null;
+    return (
+      <Link href={`/investments/${investmentId}/link`} className="flex items-center gap-3 rounded-2xl border border-dashed border-[#C9CCC6] bg-card p-[18px] text-foreground no-underline hover:text-foreground">
+        <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-[10px] border border-dashed border-[#C9CCC6] text-muted-foreground">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>
+        </span>
+        <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[13px] font-medium">Sem meta</span><span className="text-xs text-muted-foreground">Vincule a uma meta sua ou do casal</span></span>
+        <span className="text-[13px] font-medium text-primary">Vincular</span>
+      </Link>
+    );
+  }
+  return (
+    <>
+      {cards.map(({ link, goal }) => {
+        const deadline = goal.deadline ? monthYear.format(new Date(`${goal.deadline}T00:00:00Z`)) : null;
+        const beforeDeadline = dueDate && goal.deadline && dueDate <= goal.deadline;
+        return (
+          <section key={link.goalId} className={cn("grid gap-3.5 rounded-2xl border bg-card p-[18px]", link.scope === "ours" ? "border-[#C8DCD2]" : "border-border")}>
+            <div className="flex items-center justify-between">
+              <span className={cn("inline-flex items-center gap-[5px] rounded-full py-[3px] pl-1.5 pr-2 text-[11px] font-medium", link.scope === "ours" ? "bg-[#E3EDE8] text-[#123329]" : "bg-[#E6ECF6] text-[#2B4579]")}>
+                {icon}{link.scope === "ours" ? "Meta do casal" : "Minha meta"}
+              </span>
+              {owner && open ? <Link href={`/investments/${investmentId}/link`} className="text-sm font-medium text-primary hover:text-primary-press">Trocar</Link> : null}
+            </div>
+            <Link href={`/couple/goals/${goal.id}`} className="grid gap-2 text-foreground no-underline hover:text-foreground">
+              <span className="flex items-center justify-between gap-3"><span className="font-medium">{goal.name}</span><span className="tabular text-[13px] text-muted-foreground">{goal.progress.percent}%</span></span>
+              <span aria-hidden="true" className="h-2 overflow-hidden rounded-full bg-border"><span className="block h-full rounded-full bg-primary" style={{ width: `${Math.min(100, goal.progress.percent)}%` }} /></span>
+              <span className="tabular text-xs text-muted-foreground">
+                <Money cents={goal.savedCents} /> de <Money cents={goal.targetCents} />{deadline ? ` · prazo ${deadline}` : ""}
+                {link.mode === "part" && link.partCents ? <> · este investimento conta <Money cents={link.partCents} /></> : null}
+              </span>
+            </Link>
+            {beforeDeadline && open ? (
+              <p className="flex items-start gap-2.5 rounded-xl bg-[#E3EDE8] px-3.5 py-3 text-[13px] leading-[19px] text-[#123329]">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-px shrink-0"><path d="M5 12l5 5 9-10" /></svg>
+                <span>Vence em {dueDate!.split("-").reverse().join("/")}, antes do prazo da meta.</span>
+              </p>
+            ) : null}
+          </section>
+        );
+      })}
+    </>
   );
 }

@@ -7,6 +7,9 @@ import { partnerAccountsView, type OwnedAccount, type OwnedTransaction } from "@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BILL_COLUMNS, SUBSCRIPTION_COLUMNS, TAG_COLUMNS, TRANSACTION_COLUMNS, transactionLabel, type Subscription, type Tag, type Transaction, type UpcomingBill } from "@/lib/types";
 
+import { goalProgress as investedProgress } from "@/lib/domain/investments";
+
+import { loadGoalLinks } from "./goal-links";
 import { freeMoneyAllowance, getHousehold, type Household } from "./household";
 
 // Every query below filters by the household's own member ids, never by client input.
@@ -159,20 +162,29 @@ export async function budgetOverview(householdId: string, factsIn: Awaitable<Fac
   return { lines, limitCents: limit, usedCents: used, freeCents: limit - used };
 }
 
-export async function goalsOverview(householdId: string, today: string) {
+/**
+ * Goals with their progress: deposits plus the linked investments valued today.
+ * Without `ownerId`, the couple's goals ("ours"); with it, that person's own goals ("mine"),
+ * which nobody else ever receives.
+ */
+export async function goalsOverview(householdId: string, today: string, options: { ownerId?: string } = {}) {
   const admin = createAdminClient();
-  const { data: goals } = await admin.from("goals").select("id, name, icon, target_cents, deadline, status, method, created_at, completed_at").eq("household_id", householdId).order("created_at");
+  let query = admin.from("goals").select("id, name, icon, target_cents, deadline, status, method, scope, created_by, created_at, completed_at").eq("household_id", householdId);
+  query = options.ownerId ? query.eq("scope", "mine").eq("created_by", options.ownerId) : query.eq("scope", "ours");
+  const { data: goals } = await query.order("created_at");
   const ids = (goals ?? []).map((g) => g.id as string);
-  const [{ data: contributions }, { data: members }] = await Promise.all([
+  const [{ data: contributions }, { data: members }, links] = await Promise.all([
     ids.length ? admin.from("goal_contributions").select("goal_id, user_id, amount_cents, contributed_on, automatic").in("goal_id", ids) : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
     ids.length ? admin.from("goal_members").select("goal_id, user_id, percent, monthly_cents, confirmed_at").in("goal_id", ids) : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+    loadGoalLinks(ids),
   ]);
   const since = addMonths(`${today.slice(0, 7)}-01`, -3);
   return (goals ?? []).map((goal) => {
     const own = (contributions ?? []).filter((c) => c.goal_id === goal.id) as Array<{ user_id: string; amount_cents: number; contributed_on: string; automatic: boolean }>;
-    const saved = own.reduce((s, c) => s + c.amount_cents, 0);
-    const byUser: Record<string, number> = {};
-    for (const c of own) byUser[c.user_id] = (byUser[c.user_id] ?? 0) + c.amount_cents;
+    const goalLinks = links.filter((l) => l.goalId === goal.id);
+    const invested = investedProgress(goal.target_cents as number, own.map((c) => ({ userId: c.user_id, amountCents: c.amount_cents })), goalLinks);
+    const saved = invested.savedCents;
+    const byUser = invested.byUser;
     const recent = own.filter((c) => c.contributed_on >= since).reduce((s, c) => s + c.amount_cents, 0);
     const goalMembers = (members ?? []).filter((m) => m.goal_id === goal.id) as Array<{ user_id: string; percent: number | null; monthly_cents: number | null; confirmed_at: string | null }>;
     const plannedMonthly = goalMembers.reduce((s, m) => s + (m.monthly_cents ?? 0), 0);
@@ -185,7 +197,12 @@ export async function goalsOverview(householdId: string, today: string) {
       deadline: goal.deadline as string | null,
       status: goal.status as "pending" | "active" | "done" | "archived",
       completedAt: goal.completed_at as string | null,
+      scope: goal.scope as "mine" | "ours",
+      ownerId: goal.created_by as string,
       savedCents: saved,
+      contributedCents: invested.contributedCents,
+      earnedCents: invested.earnedCents,
+      investmentIds: [...new Set(goalLinks.filter((l) => l.status !== "withdrawn").map((l) => l.investmentId))],
       byUser,
       members: goalMembers,
       monthlyPaceCents: pace,
@@ -456,4 +473,12 @@ export async function loadSharedPlans(memberIds: string[]) {
     admin.from("tags").select(TAG_COLUMNS).in("user_id", memberIds).order("name"),
   ]);
   return { bills: (bills ?? []) as UpcomingBill[], subscriptions: (subs ?? []) as Subscription[], tags: (tags ?? []) as Tag[] };
+}
+
+export type GoalOverview = Awaited<ReturnType<typeof goalsOverview>>[number];
+
+/** One goal this person may see: a couple goal of their household or one of their own. */
+export async function findGoal(householdId: string, userId: string, goalId: string, today: string): Promise<GoalOverview | null> {
+  const [ours, mine] = await Promise.all([goalsOverview(householdId, today), goalsOverview(householdId, today, { ownerId: userId })]);
+  return [...ours, ...mine].find((g) => g.id === goalId) ?? null;
 }

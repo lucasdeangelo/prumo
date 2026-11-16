@@ -23,7 +23,7 @@ Phases 3–15 were delivered together on 2026-11-04 (see [PHASE_3_15_REPORT.md](
 - [x] Phase 14 — WhatsApp Agent
 - [x] Phase 15 — Notifications
 - [x] Couple — households, Meu/Nosso, visibility, privacy, guided Open Finance, cards and shared invoice, budget, goals, combinados, free money, look back ([COUPLE_REPORT.md](docs/phases/COUPLE_REPORT.md))
-- [~] Investments — phases 1–2 of 5 done: data model, sync and web portfolio screens ([INVESTMENTS_PLAN.md](docs/INVESTMENTS_PLAN.md), [INVESTMENTS_REPORT.md](docs/phases/INVESTMENTS_REPORT.md))
+- [~] Investments — phases 1–3 of 5 done: data model, sync, web portfolio screens, personal goals and links ([INVESTMENTS_PLAN.md](docs/INVESTMENTS_PLAN.md), [INVESTMENTS_REPORT.md](docs/phases/INVESTMENTS_REPORT.md))
 - [ ] Phase 16 — Hardening
 - [ ] Phase 17 — Deploy
 

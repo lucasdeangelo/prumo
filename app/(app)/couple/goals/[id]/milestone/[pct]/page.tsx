@@ -5,7 +5,7 @@ import { CoupleAvatars } from "@/components/app/couple";
 import { ShareImageButton } from "@/components/app/share-image";
 import { Money } from "@/components/app/money";
 import { requireUser } from "@/lib/auth/session";
-import { goalsOverview } from "@/lib/application/couple-data";
+import { findGoal } from "@/lib/application/couple-data";
 import { getHousehold } from "@/lib/application/household";
 import { todayIn } from "@/lib/domain/dates";
 import { formatBRL } from "@/lib/domain/money";
@@ -21,9 +21,9 @@ export default async function MilestonePage({ params }: { params: Promise<{ id: 
   const { user } = await requireUser();
   const household = await getHousehold(user.id);
   if (!household) notFound();
-  const goal = (await goalsOverview(household.id, todayIn())).find((g) => g.id === id);
+  const goal = await findGoal(household.id, user.id, id, todayIn());
   if (!goal) notFound();
-  const people = household.partner ? (household.me.color === "blue" ? [household.me, household.partner] : [household.partner, household.me]) : [household.me];
+  const people = household.partner && goal.scope === "ours" ? (household.me.color === "blue" ? [household.me, household.partner] : [household.partner, household.me]) : [household.me];
   const together = people.length > 1;
   const months = goal.monthlyPaceCents > 0 ? Math.ceil(goal.progress.missingCents / goal.monthlyPaceCents) : null;
   const { count: linked } = await createAdminClient()

@@ -98,8 +98,11 @@ export function ApprovalRequestForm({ categories }: { categories: string[] }) {
 
 // ---------- Goals ----------
 
-export function GoalForm({ meName, partnerName, incomeShare }: { meName: string; partnerName: string | null; incomeShare: number | null }) {
+export function GoalForm({ meName, partnerName: partnerOfCouple, incomeShare, defaultScope = "ours" }: { meName: string; partnerName: string | null; incomeShare: number | null; defaultScope?: "mine" | "ours" }) {
   const [state, action] = useActionState<PlanState, FormData>(createGoalAction, undefined);
+  const [scope, setScope] = useState<"mine" | "ours">(defaultScope);
+  // A personal goal is only the person's: no split, no invite.
+  const partnerName = scope === "ours" ? partnerOfCouple : null;
   const [method, setMethod] = useState<"percent" | "fixed">("percent");
   const [mine, setMine] = useState("50");
   const [theirs, setTheirs] = useState("50");
@@ -112,7 +115,27 @@ export function GoalForm({ meName, partnerName, incomeShare }: { meName: string;
 
   return (
     <form action={action} className="grid gap-4">
-      <Field label="Nome"><Input name="name" required maxLength={60} placeholder="Viagem de aniversário" /></Field>
+      <input type="hidden" name="scope" value={scope} />
+      {partnerOfCouple ? (
+        <fieldset className="grid gap-2">
+          <legend className="mb-1 text-sm font-medium">De quem é</legend>
+          <div className="grid grid-cols-2 gap-1 rounded-full bg-muted p-1">
+            {(["mine", "ours"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={scope === value}
+                onClick={() => setScope(value)}
+                className={cn("min-h-10 rounded-full text-sm font-medium", scope === value ? "bg-card font-semibold text-primary shadow-[0_1px_3px_rgba(18,21,18,0.1)]" : "text-muted-foreground")}
+              >
+                {value === "mine" ? "Minha" : "Do casal"}
+              </button>
+            ))}
+          </div>
+          <p className="text-[13px] text-muted-foreground">{scope === "mine" ? `Só você vê esta meta. ${partnerOfCouple} não fica sabendo dela.` : `${partnerOfCouple} vê a meta e confirma a própria parte.`}</p>
+        </fieldset>
+      ) : null}
+      <Field label="Nome"><Input name="name" required maxLength={60} placeholder={scope === "mine" ? "Pós-graduação" : "Viagem de aniversário"} /></Field>
       <Field label="Ícone (opcional)"><Input name="icon" maxLength={4} placeholder="✈️" /></Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Valor-alvo"><Input name="target" inputMode="decimal" required placeholder="10.000,00" value={target} onChange={(e) => setTarget(e.target.value)} /></Field>
