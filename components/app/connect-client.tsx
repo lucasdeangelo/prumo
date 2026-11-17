@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
-import { connectTokenAction, importConnectionAction, stageConnectionAction, stageExistingAction } from "@/app/(app)/connect/actions";
+import { connectTokenAction, failedConnectionAction, importConnectionAction, stageConnectionAction, stageExistingAction } from "@/app/(app)/connect/actions";
 import { Button } from "@/components/ui/button";
 import { FormMessage } from "@/components/ui/form";
 
@@ -39,9 +39,10 @@ export function AuthorizeButton() {
       language: "pt",
       theme: "light",
       onSuccess: ({ item }) => start(async () => staged(await stageConnectionAction(item.id))),
-      onError: ({ message }) => {
+      onError: ({ message, data }) => {
         // Older connect tokens could still refuse a second bank; fall back to the last connection.
         if (message.includes("ITEM_USER_ALREADY_EXISTS")) start(async () => staged(await stageExistingAction()));
+        else if (data?.item?.id) start(async () => staged(await failedConnectionAction(data.item.id)));
         else setError(`Pluggy: ${message}`);
       },
     });

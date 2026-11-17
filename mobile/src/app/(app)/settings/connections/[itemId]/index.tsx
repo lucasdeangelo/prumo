@@ -111,7 +111,7 @@ function Healthy({ d }: { d: Data }) {
       <Card style={{ gap: 8 }}>
         <Txt size={15} weight="medium">Falta algum banco?</Txt>
         <Txt size={14} color={colors.mutedForeground}>No MeuPluggy, cada banco é autorizado separadamente. Conectou outro banco lá? Autorize aqui também e escolha esse banco na tela do MeuPluggy. Ele entra como uma conexão nova, sem mexer nesta.</Txt>
-        <Button variant="outline" href="/connect?step=5">Conectar outro banco</Button>
+        <Button variant="outline" href="/connect?step=outro">Conectar outro banco</Button>
       </Card>
       <Button variant="outline" onPress={() => WebBrowser.openBrowserAsync("https://meu.pluggy.ai")}>Ver a conexão no MeuPluggy</Button>
     </>

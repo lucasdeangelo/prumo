@@ -129,7 +129,7 @@ export default async function ConnectionPage({ params }: { params: Promise<{ ite
         <p className="text-sm text-muted-foreground">
           No MeuPluggy, cada banco é autorizado separadamente. Conectou outro banco lá? Autorize aqui também e escolha esse banco na tela do MeuPluggy. Ele entra como uma conexão nova, sem mexer nesta.
         </p>
-        <Link href="/connect?step=5" className="inline-flex min-h-12 items-center justify-center rounded-full border border-foreground px-6 text-[15px] font-medium text-foreground hover:text-foreground">
+        <Link href="/connect?step=outro" className="inline-flex min-h-12 items-center justify-center rounded-full border border-foreground px-6 text-[15px] font-medium text-foreground hover:text-foreground">
           Conectar outro banco
         </Link>
       </Card>

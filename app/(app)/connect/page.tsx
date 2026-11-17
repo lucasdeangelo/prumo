@@ -95,7 +95,27 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
         ) : null}
         <div className="grid gap-2">
           <Link href="/connect?step=3" className={primaryLink}>Ir para o MeuPluggy</Link>
-          <Link href="/connect?step=5" className={ghostLink}>Já tenho conta no MeuPluggy</Link>
+          <Link href="/connect?step=outro" className={ghostLink}>Já tenho conta no MeuPluggy</Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Existing MeuPluggy account: the authorization only lists banks already there, so a new bank goes in first.
+  if (step === "outro") {
+    return (
+      <div className="grid gap-6">
+        <PageHeader title="" back="/connect?step=2" />
+        <Stage label="Etapa 1 de 2" />
+        <h1 className="text-[28px] font-medium leading-tight tracking-[-0.02em]">O banco já está no seu MeuPluggy?</h1>
+        <p className="text-[15px] text-muted-foreground">Na autorização, o MeuPluggy só mostra os bancos que já estão conectados na sua conta de lá. Um banco novo precisa ser adicionado lá primeiro.</p>
+        <ol className="grid gap-3 text-[15px]">
+          <li className="flex gap-3"><span className="tabular font-medium text-primary">1</span>Entre no MeuPluggy e conecte o banco novo. O app do banco abre para você confirmar.</li>
+          <li className="flex gap-3"><span className="tabular font-medium text-primary">2</span>Volte aqui e autorize o Prumo escolhendo esse banco.</li>
+        </ol>
+        <div className="grid gap-2">
+          <OpenMeuPluggy label="Adicionar um banco no MeuPluggy" />
+          <Link href="/connect?step=5" className={ghostLink}>O banco já está lá, autorizar</Link>
         </div>
       </div>
     );
@@ -143,7 +163,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
         <PageHeader title="" back="/connect?step=4" />
         <Stage label="Etapa 2 de 2" />
         <h1 className="text-[28px] font-medium leading-tight tracking-[-0.02em]">Autorizar o Prumo a ler seus dados</h1>
-        <p className="text-[15px] text-muted-foreground">Pelo conector MeuPluggy, com a conta que você acabou de usar.</p>
+        <p className="text-[15px] text-muted-foreground">Pelo conector MeuPluggy, com a conta que você acabou de usar. Lá, escolha o banco que quer trazer.</p>
         <Card className="grid gap-3">
           <p className="label-mono">O Prumo vai ler</p>
           <ul className="grid gap-3">
@@ -164,6 +184,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
         </p>
         <div className="grid gap-2">
           <AuthorizeButton />
+          <OpenMeuPluggy label="Adicionar banco no MeuPluggy" next="/connect?step=4" variant="outline" />
           <Link href="/settings" className={ghostLink}>Cancelar</Link>
         </div>
       </div>

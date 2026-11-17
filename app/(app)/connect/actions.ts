@@ -8,7 +8,7 @@ import { requireUser } from "@/lib/auth/session";
 import { disconnectItem, stageConnection, syncItem } from "@/lib/application/pluggy-sync";
 import { setAccountImport } from "@/lib/application/privacy";
 import { ConfigurationError, getServerEnv } from "@/lib/env.server";
-import { createConnectToken, PluggyError } from "@/lib/integrations/pluggy";
+import { createConnectToken, getItem, PluggyError } from "@/lib/integrations/pluggy";
 import { safeRelativePath } from "@/lib/safe-path";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -55,6 +55,28 @@ export async function stageExistingAction(): Promise<{ itemId?: string; accounts
     .maybeSingle();
   if (!data) return { error: "Não encontramos sua conexão MeuPluggy. Tente de novo em alguns minutos." };
   return stageConnectionAction(data.pluggy_item_id as string);
+}
+
+/**
+ * The widget reported a failed sync ("Item was not sync successfully"). Records why, and goes on with
+ * what came if the item already has accounts; otherwise explains what to try.
+ */
+export async function failedConnectionAction(itemId: string): Promise<{ itemId?: string; accounts?: number; error?: string }> {
+  const { user } = await requireUser();
+  const id = z.uuid().safeParse(itemId);
+  const fallback = "O MeuPluggy não conseguiu entregar os dados desse banco agora. Se você acabou de adicioná-lo lá, espere alguns minutos até ele aparecer atualizado no MeuPluggy e tente de novo.";
+  if (!id.success) return { error: fallback };
+  try {
+    const item = await getItem(id.data);
+    if (item.clientUserId !== user.id) return { error: fallback };
+    console.warn("connect: widget sync failed", JSON.stringify({ item: id.data.slice(0, 8), status: item.status, execution: item.executionStatus ?? null, code: item.error?.code ?? null, message: item.error?.message ?? null }));
+    const staged = await stageConnection(user.id, id.data);
+    if (staged.accountCount > 0) return { itemId: staged.itemId, accounts: staged.accountCount };
+    return { error: `${fallback}${item.executionStatus ? ` (${item.executionStatus})` : ""}` };
+  } catch (error) {
+    console.warn("connect: failed item lookup", error instanceof Error ? error.message : error);
+    return { error: fallback };
+  }
 }
 
 export async function setImportAction(formData: FormData) {

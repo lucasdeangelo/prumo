@@ -81,6 +81,7 @@ export const MOBILE_ACTIONS = {
   connectToken: none(connect.connectTokenAction),
   stageConnection: id(connect.stageConnectionAction),
   stageExisting: none(connect.stageExistingAction),
+  failedConnection: id(connect.failedConnectionAction),
   setImport: form(connect.setImportAction),
   importConnection: id(connect.importConnectionAction),
   disconnect: form(connect.disconnectAction),

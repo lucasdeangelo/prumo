@@ -86,7 +86,27 @@ function Step({ step, item, n, d }: { step: string; item?: string; n?: string; d
         ) : null}
         <View style={{ gap: 8 }}>
           <Button onPress={() => go("/connect?step=3")}>Ir para o MeuPluggy</Button>
-          <Button variant="ghost" onPress={() => go("/connect?step=5")}>Já tenho conta no MeuPluggy</Button>
+          <Button variant="ghost" onPress={() => go("/connect?step=outro")}>Já tenho conta no MeuPluggy</Button>
+        </View>
+      </>
+    );
+  }
+
+  // Existing MeuPluggy account: the authorization only lists banks already there, so a new bank goes in first.
+  if (step === "outro") {
+    return (
+      <>
+        <PageHeader back="/connect?step=2" />
+        <Label>Etapa 1 de 2</Label>
+        <Title>O banco já está no seu MeuPluggy?</Title>
+        <Lead>Na autorização, o MeuPluggy só mostra os bancos que já estão conectados na sua conta de lá. Um banco novo precisa ser adicionado lá primeiro.</Lead>
+        <View style={{ gap: 12 }}>
+          <Row gap={12} align="flex-start"><Txt weight="medium" color={colors.primary} tabular>1</Txt><Txt style={{ flex: 1 }}>Entre no MeuPluggy e conecte o banco novo. O app do banco abre para você confirmar.</Txt></Row>
+          <Row gap={12} align="flex-start"><Txt weight="medium" color={colors.primary} tabular>2</Txt><Txt style={{ flex: 1 }}>Volte aqui e autorize o Prumo escolhendo esse banco.</Txt></Row>
+        </View>
+        <View style={{ gap: 8 }}>
+          <OpenMeuPluggy label="Adicionar um banco no MeuPluggy" />
+          <Button variant="ghost" onPress={() => go("/connect?step=5")}>O banco já está lá, autorizar</Button>
         </View>
       </>
     );
@@ -133,7 +153,7 @@ function Step({ step, item, n, d }: { step: string; item?: string; n?: string; d
         <PageHeader back="/connect?step=4" />
         <Label>Etapa 2 de 2</Label>
         <Title>Autorizar o Prumo a ler seus dados</Title>
-        <Lead>Pelo conector MeuPluggy, com a conta que você acabou de usar.</Lead>
+        <Lead>Pelo conector MeuPluggy, com a conta que você acabou de usar. Lá, escolha o banco que quer trazer.</Lead>
         <Card style={{ gap: 12 }}>
           <Label>O Prumo vai ler</Label>
           <Point title="Contas" body="Saldos e extratos de conta corrente e poupança" />
@@ -150,6 +170,7 @@ function Step({ step, item, n, d }: { step: string; item?: string; n?: string; d
         </Txt>
         <View style={{ gap: 8 }}>
           <AuthorizeButton />
+          <OpenMeuPluggy label="Adicionar banco no MeuPluggy" next="/connect?step=4" variant="outline" />
           <Button variant="ghost" onPress={() => router.dismissTo("/settings")}>Cancelar</Button>
         </View>
       </>
@@ -339,6 +360,7 @@ function AuthorizeButton() {
   const token = useAction<{ token?: string; includeSandbox?: boolean; error?: string }>("connectToken");
   const stage = useAction<{ itemId?: string; accounts?: number; error?: string }>("stageConnection");
   const existing = useAction<{ itemId?: string; accounts?: number; error?: string }>("stageExisting");
+  const failed = useAction<{ itemId?: string; accounts?: number; error?: string }>("failedConnection");
   const [widget, setWidget] = useState<{ token: string; includeSandbox: boolean } | null>(null);
   const [error, setError] = useState<string>();
 
@@ -357,7 +379,7 @@ function AuthorizeButton() {
     setWidget({ token: result.token, includeSandbox: Boolean(result.includeSandbox) });
   };
 
-  const busy = token.pending || stage.pending || existing.pending;
+  const busy = token.pending || stage.pending || existing.pending || failed.pending;
   return (
     <View style={{ gap: 8 }}>
       <Button pending={busy} pendingText="Aguarde…" onPress={open}>Autorizar e escolher contas</Button>
@@ -380,10 +402,11 @@ function AuthorizeButton() {
                 setWidget(null);
                 staged(await stage.run(undefined, [item.id]));
               }}
-              onError={async ({ message }) => {
+              onError={async ({ message, data }) => {
                 setWidget(null);
                 // Older connect tokens could still refuse a second bank; fall back to the last connection.
                 if (message.includes("ITEM_USER_ALREADY_EXISTS")) staged(await existing.run());
+                else if (data?.item?.id) staged(await failed.run(undefined, [data.item.id]));
                 else setError(`Pluggy: ${message}`);
               }}
             />
