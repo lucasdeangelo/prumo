@@ -17,7 +17,7 @@ Nenhuma porta do roteador precisa ser aberta. Só o nginx publica uma porta (808
 | `app` | Telas, ações do servidor, `/api` (webhook do Pluggy, API do bot, cron) | — |
 | `nginx` | Entrada única: rede local e origem do túnel; cabeçalhos de segurança | — |
 | `cloudflared` | Endereço público HTTPS (perfil `public`) | — |
-| `bot` | WhatsApp (whatsapp-web.js + Chromium), perfil `bot` | volume `prumo_bot-data` (sessão) |
+| `bot` | WhatsApp (Baileys, sem navegador), perfil `bot` | volume `prumo_bot-data` (sessão) |
 | `ollama` / `ollama-pull` | Modelo pequeno do bot, opcional (perfil `ai`); o segundo só baixa o modelo | volume `prumo_ollama-models` |
 | `tasks` | 08:00 lembretes; a cada 15 min, dados novos dos bancos; 03:30 backup do banco | `deploy/backups/` |
 
@@ -128,19 +128,21 @@ Abra `APP_URL` no celular e entre com a sua conta.
 docker compose logs -f bot
 ```
 
-Leia o QR code no WhatsApp (Aparelhos conectados › Conectar aparelho). A sessão fica no volume `prumo_bot-data` e sobrevive a reinícios e atualizações.
+Leia o QR code no WhatsApp do número do bot (Dispositivos conectados › Conectar dispositivo). Sem câmera à mão, ponha `WHATSAPP_PAIRING_NUMBER=55DDDNUMERO` (o número do bot) no `.env`, recrie o bot e use o código de 8 caracteres que aparece no log, em Conectar dispositivo › Conectar com número de telefone. Depois de conectado, a variável pode sair do `.env`.
 
-**Trazer a sessão que já existe** (para não ler o QR de novo). Pare o bot na outra máquina antes: duas cópias da mesma sessão rodando ao mesmo tempo derrubam uma à outra. Copie a pasta da sessão (`~/.prumo-bot/session` ou, nas versões antigas, `bot/session`) para o Fedora, por exemplo em `~/prumo-session`, e rode:
+A sessão (chaves do Baileys) fica em `/data/baileys`, no volume `prumo_bot-data`, e sobrevive a reinícios e atualizações. Se o bot for removido dos dispositivos conectados no celular, ele apaga a sessão e pede um QR novo no log.
+
+**Trazer a sessão que já existe** (para não conectar de novo). Pare o bot na outra máquina antes: duas cópias da mesma sessão rodando ao mesmo tempo derrubam uma à outra. Copie a pasta da sessão (`~/.prumo-bot/baileys`) para o servidor, por exemplo em `~/prumo-baileys`, e rode:
 
 ```bash
 docker compose stop bot
-docker run --rm -v prumo_bot-data:/data -v ~/prumo-session:/src:ro,Z alpine \
-  sh -c 'mkdir -p /data/session && cp -a /src/. /data/session/ && chown -R 1000:1000 /data'
+docker run --rm -v prumo_bot-data:/data -v ~/prumo-baileys:/src:ro,Z alpine \
+  sh -c 'mkdir -p /data/baileys && cp -a /src/. /data/baileys/ && chown -R 1000:1000 /data'
 docker compose start bot
 docker compose logs -f bot   # deve aparecer "✅ Bot Prumo conectado!" sem pedir QR
 ```
 
-Se o bot pedir QR mesmo assim, a sessão copiada não serviu. Leia o QR uma vez e pronto.
+Se o bot pedir QR mesmo assim, a sessão copiada não serviu. Conecte uma vez e pronto. Sessões da versão antiga (whatsapp-web.js, pasta `session`) não servem para o Baileys.
 
 ## 7. Webhook do Pluggy (atualização automática)
 

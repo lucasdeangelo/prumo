@@ -7,7 +7,7 @@
 #   app         Next.js: pages, server actions, /api (webhook, bot API, cron endpoint)
 #   nginx       in front of the app: LAN access on LAN_PORT and origin for the tunnel
 #   cloudflared public HTTPS through Cloudflare Tunnel (no router ports opened)
-#   bot         WhatsApp (whatsapp-web.js + Chromium), session in the bot-data volume (profile "bot")
+#   bot         WhatsApp (Baileys, no browser), session in the bot-data volume (profile "bot")
 #   ollama      small local model for the bot (profile "ai"; needs ~2 GB of RAM)
 #   tasks       daily notifications cron and database backup (pg_dump to ./backups)
 
@@ -84,10 +84,11 @@ services:
       OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
       OUTBOX_INTERVAL_MS: ${OUTBOX_INTERVAL_MS:-30000}
+      # Optional: link with an 8-character code instead of a QR (digits, country code first).
+      WHATSAPP_PAIRING_NUMBER: ${WHATSAPP_PAIRING_NUMBER:-}
     volumes:
       - bot-data:/data
-    shm_size: "512m"
-    mem_limit: ${BOT_MEM_LIMIT:-1g}
+    mem_limit: ${BOT_MEM_LIMIT:-256m}
     depends_on:
       app:
         condition: service_healthy

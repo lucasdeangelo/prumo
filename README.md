@@ -2,7 +2,7 @@
 
 Finanças pessoais, mobile first: entradas e saídas com **tags automáticas**, visão por mês com gráficos, **contas futuras**, **assinaturas** detectadas (ou cadastradas por você), conexão com bancos via **Pluggy (Open Finance)** e um **bot de WhatsApp** que registra gastos e manda avisos.
 
-Monolito Next.js 16 (App Router) + Tailwind 4 + Supabase (Postgres, Auth, RLS). O bot é um processo separado em `bot/` (whatsapp-web.js + modelo local pequeno via Ollama), no mesmo estilo do `estoque-bot`.
+Monolito Next.js 16 (App Router) + Tailwind 4 + Supabase (Postgres, Auth, RLS). O bot é um processo separado em `bot/` (Baileys, sem navegador, + modelo local pequeno via Ollama), no mesmo estilo do `estoque-bot`.
 
 Veja também: [arquitetura](ARCHITECTURE.md), [modelo de dados](DATA_MODEL.md), [segurança](SECURITY_MODEL.md), [plano](IMPLEMENTATION_PLAN.md) e o [relatório das fases 3–15](docs/phases/PHASE_3_15_REPORT.md).
 
@@ -92,4 +92,4 @@ npm run build
 
 **Alternativa:** app na Vercel (variáveis do `.env.example`, `vercel.json` já agenda o cron), banco/Auth no Supabase (`npx supabase db push` para aplicar as migrations), bot numa VPS com disco persistente para a sessão do WhatsApp (`~/.prumo-bot/session` ou `WHATSAPP_SESSION_PATH`, sempre fora da pasta do app). Separe desenvolvimento e produção.
 
-> whatsapp-web.js automatiza o WhatsApp Web e não é uma API oficial; use um número dedicado ao bot.
+> O Baileys fala o protocolo do WhatsApp Web e não é uma API oficial; use um número dedicado ao bot.

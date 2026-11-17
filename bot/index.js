@@ -1,14 +1,16 @@
 require("dotenv").config();
 
+const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 
-const { Client, LocalAuth } = require("whatsapp-web.js");
+const pino = require("pino");
 const qrcode = require("qrcode-terminal");
 
 const { createAi } = require("./lib/ai");
 const { createApi } = require("./lib/api");
 const { createConversation } = require("./lib/conversation");
+const { hasMedia, isPersonalChat, phoneOf, textOf, toAppChatId, toBaileysJid } = require("./lib/jid");
 
 // ==================== CONFIG ====================
 const APP_URL = process.env.PRUMO_APP_URL || "http://localhost:3000";
@@ -17,71 +19,39 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2:1b";
 const AI_ENABLED = process.env.AI_ENABLED !== "false";
 const OUTBOX_INTERVAL_MS = Number(process.env.OUTBOX_INTERVAL_MS || 30000);
 const HEALTH_INTERVAL_MS = Number(process.env.HEALTH_INTERVAL_MS || 5 * 60 * 1000);
-// Outside the app folder: the WhatsApp browser profile changes every few seconds, and inside the
-// project it makes `next dev` recompile in a loop.
-const SESSION_PATH = process.env.WHATSAPP_SESSION_PATH || path.join(os.homedir(), ".prumo-bot", "session");
+// Outside the app folder: the session keys change often, and inside the project they make
+// `next dev` recompile in a loop.
+const AUTH_PATH = process.env.WHATSAPP_AUTH_PATH || path.join(os.homedir(), ".prumo-bot", "baileys");
+// With a number (digits, country code first), linking uses an 8-character code instead of a QR.
+const PAIRING_NUMBER = (process.env.WHATSAPP_PAIRING_NUMBER || "").replace(/\D/g, "");
+// Messages that waited longer than this while the bot was offline are skipped, not answered late.
+const MAX_MESSAGE_AGE_S = 12 * 60 * 60;
 
 const api = createApi({ baseUrl: APP_URL, secret: (process.env.INTERNAL_API_SECRET || "").trim() });
 const ai = AI_ENABLED ? createAi({ url: OLLAMA_URL, model: OLLAMA_MODEL }) : null;
 const conversation = createConversation({ api, ai });
+const logger = pino({ level: process.env.BAILEYS_LOG_LEVEL || "warn" });
 
-// ==================== CLIENTE WHATSAPP ====================
-const client = new Client({
-  authStrategy: new LocalAuth({ clientId: "prumo-bot", dataPath: SESSION_PATH }),
-  puppeteer: {
-    headless: true,
-    // In Docker the system Chromium is used (PUPPETEER_EXECUTABLE_PATH); locally puppeteer's own.
-    ...(process.env.PUPPETEER_EXECUTABLE_PATH ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH } : {}),
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
-  },
-});
-
+/** Baileys is an ES module; this file stays CommonJS like the rest of the bot. */
+let B;
+let sock = null;
 let ready = false;
+let registered = false;
+let lastOpenAt = 0;
+let lastChangeAt = Date.now();
+let pairingRequested = false;
+let reconnectDelay = 2000;
 let failedSends = 0;
 
-/**
- * WhatsApp Web can freeze inside the browser while the process keeps running: sends time out and
- * no message arrives. Exiting lets Docker (restart: unless-stopped) start a fresh browser with the
- * saved session, which needs no new QR code.
- */
-async function restart(reason) {
-  console.error(`🔄 Reiniciando o bot: ${reason}`);
-  await withTimeout(client.destroy(), 10000, "destroy").catch(() => {});
-  process.exit(1);
+// Sent messages, for WhatsApp's retry requests (a phone that could not decrypt asks again).
+const sent = new Map();
+function remember(message) {
+  if (!message?.key?.id || !message.message) return;
+  sent.set(message.key.id, message.message);
+  if (sent.size > 500) sent.delete(sent.keys().next().value);
 }
 
-async function safeSend(chatId, text) {
-  try {
-    await withTimeout(client.sendMessage(chatId, text), 20000, "sendMessage");
-    failedSends = 0;
-    return true;
-  } catch (error) {
-    console.error(`Erro ao enviar para ${chatId}:`, describe(error));
-    failedSends += 1;
-    if (failedSends >= 3) restart(`${failedSends} envios seguidos falharam`);
-    return false;
-  }
-}
-
-client.on("qr", (qr) => {
-  qrcode.generate(qr, { small: true });
-  console.log("\n📱 Escaneie o QR Code com o WhatsApp do número do bot");
-});
-client.on("authenticated", () => console.log("🔐 Sessão autenticada."));
-client.on("auth_failure", (msg) => console.error("❌ Falha de autenticação:", msg));
-client.on("disconnected", (reason) => {
-  ready = false;
-  console.warn("⚠️ Desconectado:", reason);
-  restart(`desconectado (${reason})`);
-});
-client.on("ready", () => {
-  ready = true;
-  console.log("✅ Bot Prumo conectado!");
-  console.log(`🎯 App: ${APP_URL}`);
-  console.log(`🤖 IA: ${AI_ENABLED ? `${OLLAMA_MODEL} em ${OLLAMA_URL}` : "desligada"}`);
-});
-
-/** WhatsApp Web calls can hang without throwing; never wait on them forever. */
+/** Network calls can hang without throwing; never wait on them forever. */
 function withTimeout(promise, ms, label) {
   let timer;
   return Promise.race([
@@ -92,52 +62,50 @@ function withTimeout(promise, ms, label) {
   ]).finally(() => clearTimeout(timer));
 }
 
-/** The sender's phone. Newer WhatsApp ids (@lid) hide it, so ask the contact first, then the lid map. */
-async function senderPhone(msg) {
-  const from = msg.from || "";
-  if (from.endsWith("@c.us")) return from;
-  try {
-    const contact = await withTimeout(msg.getContact(), 8000, "getContact");
-    if (contact && contact.number) return contact.number;
-  } catch (error) {
-    console.error("Não foi possível ler o contato:", describe(error));
-  }
-  try {
-    const [pair] = await withTimeout(client.getContactLidAndPhone([from]), 8000, "getContactLidAndPhone");
-    if (pair && pair.pn) return pair.pn;
-  } catch (error) {
-    console.error("Não foi possível resolver o @lid:", describe(error));
-  }
-  return null;
-}
-
-/** whatsapp-web.js rethrows minified browser errors ("r", "t"); keep the stack's first lines. */
 function describe(error) {
   if (!error) return "erro desconhecido";
-  const stack = String(error.stack || "").split("\n").slice(0, 3).join(" | ");
-  return stack || error.message || String(error);
+  return String(error.stack || error.message || error).split("\n").slice(0, 3).join(" | ");
 }
 
-/** Stable id of a message for idempotency. Newer WhatsApp Web builds may leave _serialized empty. */
-function messageIdOf(msg, chatId) {
-  const id = (msg.id && (msg.id._serialized || msg.id.id)) || `${chatId}_${msg.timestamp || Date.now()}`;
-  return String(id).slice(0, 200);
-}
-
-/** "digitando…" is cosmetic: newer WhatsApp Web builds can break getChat(), which must not block replies. */
-async function showTyping(chatId) {
+/** Last resort: exit and let Docker (restart: unless-stopped) start a fresh process with the saved session. */
+function restart(reason) {
+  console.error(`🔄 Reiniciando o bot: ${reason}`);
   try {
-    const chat = await withTimeout(client.getChatById(chatId), 5000, "getChatById");
-    await withTimeout(chat.sendStateTyping(), 5000, "sendStateTyping");
+    sock?.end(undefined);
   } catch {
     // ignore
   }
+  process.exit(1);
 }
 
-/**
- * When WhatsApp Web reloads itself (e.g. right after linking), whatsapp-web.js injects its listeners
- * again and every message arrives twice. Handle each message id once.
- */
+async function safeSend(jid, text) {
+  try {
+    if (!sock || !ready) throw new Error("WhatsApp desconectado");
+    remember(await withTimeout(sock.sendMessage(jid, { text }), 20000, "sendMessage"));
+    failedSends = 0;
+    return true;
+  } catch (error) {
+    console.error(`Erro ao enviar para ${jid}:`, describe(error));
+    failedSends += 1;
+    if (failedSends >= 3) restart(`${failedSends} envios seguidos falharam`);
+    return false;
+  }
+}
+
+/** The sender's phone digits. Hidden-number chats (@lid) carry it in remoteJidAlt or in Baileys' lid map. */
+async function senderPhone(jid, key) {
+  const direct = phoneOf(jid) || phoneOf(key.remoteJidAlt);
+  if (direct) return direct;
+  if (!B.isLidUser(jid)) return null;
+  try {
+    return phoneOf(await withTimeout(sock.signalRepository.lidMapping.getPNForLID(jid), 8000, "getPNForLID"));
+  } catch (error) {
+    console.error("Não foi possível resolver o @lid:", describe(error));
+    return null;
+  }
+}
+
+/** Duplicates can arrive after a reconnect; handle each message id once. */
 const handled = new Set();
 function firstTime(id) {
   if (handled.has(id)) return false;
@@ -147,40 +115,122 @@ function firstTime(id) {
 }
 
 // ==================== MENSAGENS ====================
-client.on("message", async (msg) => {
-  if (msg.fromMe) return;
-  const chatId = msg.from || "";
-  if (chatId.endsWith("@g.us") || chatId.endsWith("@newsletter") || chatId === "status@broadcast") return;
-  if (!firstTime(messageIdOf(msg, chatId))) return;
-  const text = (msg.body || "").trim();
+async function handleMessage(m) {
+  const key = m.key || {};
+  if (key.fromMe || !key.id) return;
+  const jid = B.jidNormalizedUser(key.remoteJid);
+  if (!isPersonalChat(jid)) return;
+  const content = B.normalizeMessageContent(m.message);
+  if (!content || content.protocolMessage || content.reactionMessage) return;
+  if (!firstTime(key.id)) return;
+  const sentAt = Number(m.messageTimestamp || 0);
+  if (sentAt && Date.now() / 1000 - sentAt > MAX_MESSAGE_AGE_S) return;
+
+  const text = textOf(content).trim();
   if (!text) {
-    if (msg.hasMedia) await safeSend(chatId, "📎 Por enquanto entendo só texto. Ex.: *gastei 45,90 no mercado*");
+    if (hasMedia(content)) await safeSend(jid, "📎 Por enquanto entendo só texto. Ex.: *gastei 45,90 no mercado*");
     return;
   }
 
   if (text === "/status") {
-    await safeSend(chatId, `✅ Bot online\n🎯 App: ${APP_URL}\n🤖 IA: ${AI_ENABLED ? OLLAMA_MODEL : "desligada"}`);
+    await safeSend(jid, `✅ Bot online\n🎯 App: ${APP_URL}\n🤖 IA: ${AI_ENABLED ? OLLAMA_MODEL : "desligada"}`);
     return;
   }
 
-  console.log(`📩 Mensagem de ${chatId}: ${text.slice(0, 60)}`);
-  const phone = await senderPhone(msg);
-  console.log(`   número: ${phone ? `${String(phone).replace(/@.*/, "").slice(0, 4)}…` : "não identificado"}`);
+  console.log(`📩 Mensagem de ${jid}: ${text.slice(0, 60)}`);
+  const phone = await senderPhone(jid, key);
+  console.log(`   número: ${phone ? `${phone.slice(0, 4)}…` : "não identificado"}`);
   if (!phone) {
-    await safeSend(chatId, "❌ Não consegui identificar seu número.");
+    await safeSend(jid, "❌ Não consegui identificar seu número.");
     return;
   }
 
-  showTyping(chatId);
+  // "digitando…" is cosmetic and must never block the reply.
+  sock.sendPresenceUpdate("composing", jid).catch(() => {});
   try {
-    const reply = await conversation.handle({ chatId, phone, text, messageId: messageIdOf(msg, chatId) });
-    if (reply) await safeSend(chatId, reply);
+    const reply = await conversation.handle({ chatId: toAppChatId(jid) || jid, phone, text, messageId: String(key.id).slice(0, 200) });
+    if (reply) await safeSend(jid, reply);
   } catch (error) {
     console.error("Erro ao processar mensagem:", describe(error));
-    const text = error.status === 401 ? "❌ Bot sem autorização no app (confira INTERNAL_API_SECRET)." : "❌ O app não respondeu. Tente de novo em instantes.";
-    await safeSend(chatId, text);
+    const answer = error.status === 401 ? "❌ Bot sem autorização no app (confira INTERNAL_API_SECRET)." : "❌ O app não respondeu. Tente de novo em instantes.";
+    await safeSend(jid, answer);
+  } finally {
+    sock.sendPresenceUpdate("paused", jid).catch(() => {});
   }
-});
+}
+
+// ==================== CONEXÃO ====================
+async function onConnection({ connection, lastDisconnect, qr }) {
+  if (connection) lastChangeAt = Date.now();
+  if (qr) {
+    if (PAIRING_NUMBER) {
+      if (pairingRequested) return;
+      pairingRequested = true;
+      try {
+        const code = await sock.requestPairingCode(PAIRING_NUMBER);
+        console.log(`\n🔑 Código de pareamento: ${code.match(/.{1,4}/g).join("-")}`);
+        console.log("No celular do bot: WhatsApp › Dispositivos conectados › Conectar dispositivo › Conectar com número de telefone.");
+      } catch (error) {
+        pairingRequested = false;
+        console.error("Não foi possível pedir o código de pareamento:", describe(error));
+      }
+    } else {
+      qrcode.generate(qr, { small: true });
+      console.log("\n📱 Escaneie o QR Code com o WhatsApp do número do bot");
+    }
+  }
+
+  if (connection === "open") {
+    ready = true;
+    registered = true;
+    lastOpenAt = Date.now();
+    reconnectDelay = 2000;
+    console.log("✅ Bot Prumo conectado!");
+    console.log(`🎯 App: ${APP_URL}`);
+    console.log(`🤖 IA: ${AI_ENABLED ? `${OLLAMA_MODEL} em ${OLLAMA_URL}` : "desligada"}`);
+  }
+
+  if (connection === "close") {
+    ready = false;
+    const code = lastDisconnect?.error?.output?.statusCode;
+    if (code === B.DisconnectReason.loggedOut) {
+      // The bot was removed from "Dispositivos conectados": the saved keys are useless now.
+      console.error("❌ Sessão encerrada no celular. Apagando a sessão; será preciso conectar de novo.");
+      await fs.rm(AUTH_PATH, { recursive: true, force: true }).catch(() => {});
+      registered = false;
+      pairingRequested = false;
+    } else {
+      console.warn(`⚠️ Conexão fechada (${code ?? "sem código"}): ${lastDisconnect?.error?.message ?? ""}`);
+    }
+    // Right after linking WhatsApp asks for a restart (515); otherwise back off up to a minute.
+    const delay = code === B.DisconnectReason.restartRequired ? 0 : reconnectDelay;
+    reconnectDelay = Math.min(reconnectDelay * 2, 60000);
+    setTimeout(() => connect().catch((error) => restart(`falha ao reconectar: ${describe(error)}`)), delay);
+  }
+}
+
+async function connect() {
+  await fs.mkdir(AUTH_PATH, { recursive: true });
+  const { state, saveCreds } = await B.useMultiFileAuthState(AUTH_PATH);
+  registered = Boolean(state.creds.registered);
+  // The newest WhatsApp Web version avoids "405" refusals; the bundled one is the fallback.
+  const latest = await withTimeout(B.fetchLatestBaileysVersion(), 10000, "fetchLatestBaileysVersion").catch(() => null);
+  sock = B.makeWASocket({
+    ...(latest?.version ? { version: latest.version } : {}),
+    auth: { creds: state.creds, keys: B.makeCacheableSignalKeyStore(state.keys, logger) },
+    logger,
+    markOnlineOnConnect: false,
+    syncFullHistory: false,
+    generateHighQualityLinkPreview: false,
+    getMessage: async (key) => sent.get(key.id),
+  });
+  sock.ev.on("creds.update", saveCreds);
+  sock.ev.on("connection.update", (update) => onConnection(update).catch((error) => console.error("Erro na conexão:", describe(error))));
+  sock.ev.on("messages.upsert", ({ messages, type }) => {
+    if (type !== "notify") return;
+    for (const m of messages) handleMessage(m).catch((error) => console.error("Erro ao tratar mensagem:", describe(error)));
+  });
+}
 
 // ==================== AVISOS (OUTBOX) ====================
 let delivering = false;
@@ -196,12 +246,12 @@ async function deliverOutbox() {
       let error;
       try {
         // Prefer the chat the user linked from (works for @lid ids). Older links only have a phone:
-        // getNumberId resolves it (e.g. Brazilian numbers with/without the 9th digit).
-        let target = item.chatId;
+        // onWhatsApp resolves it (e.g. Brazilian numbers with/without the 9th digit).
+        let target = item.chatId ? toBaileysJid(item.chatId) : null;
         if (!target) {
-          const numberId = await withTimeout(client.getNumberId(digits), 10000, "getNumberId");
-          if (!numberId) throw new Error("Número sem WhatsApp");
-          target = numberId._serialized;
+          const [found] = (await withTimeout(sock.onWhatsApp(digits), 10000, "onWhatsApp")) || [];
+          if (!found?.exists) throw new Error("Número sem WhatsApp");
+          target = found.jid;
         }
         ok = await safeSend(target, item.text);
         if (!ok) error = "Falha no envio";
@@ -218,34 +268,35 @@ async function deliverOutbox() {
   }
 }
 
-setInterval(deliverOutbox, OUTBOX_INTERVAL_MS);
-
 // ==================== VIGIA DA CONEXÃO ====================
-// After the first "ready", ask WhatsApp Web its state now and then. Two failed checks in a row
-// (no answer, or not CONNECTED) mean the session froze: restart instead of staying silent.
-let failedChecks = 0;
-setInterval(async () => {
-  if (!ready) return;
-  try {
-    const state = await withTimeout(client.getState(), 20000, "getState");
-    if (state === "CONNECTED") {
-      failedChecks = 0;
-      return;
-    }
-    throw new Error(`estado ${state}`);
-  } catch (error) {
-    failedChecks += 1;
-    console.warn(`⚠️ Checagem da conexão falhou (${failedChecks}):`, error.message);
-    if (failedChecks >= 2) restart("conexão sem resposta");
-  }
+// Baileys reconnects by itself. If a linked bot stays offline for 15 minutes anyway, start over.
+setInterval(() => {
+  if (ready || !registered) return;
+  if (Date.now() - Math.max(lastChangeAt, lastOpenAt) > 15 * 60 * 1000) restart("sem conexão há 15 minutos");
 }, HEALTH_INTERVAL_MS);
 
 // ==================== START ====================
-console.log("🚀 Iniciando bot WhatsApp do Prumo...");
-client.initialize();
+async function main() {
+  console.log("🚀 Iniciando bot WhatsApp do Prumo...");
+  B = await import("baileys");
+  await connect();
+  setInterval(deliverOutbox, OUTBOX_INTERVAL_MS);
+}
 
-process.on("SIGINT", async () => {
+function shutdown() {
   console.log("\nEncerrando...");
-  await client.destroy().catch(() => {});
+  try {
+    // end() closes the connection without logging out: the session stays valid.
+    sock?.end(undefined);
+  } catch {
+    // ignore
+  }
   process.exit(0);
+}
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
+main().catch((error) => {
+  console.error("Falha ao iniciar:", describe(error));
+  process.exit(1);
 });
