@@ -10,6 +10,7 @@ import { listRules, listTags } from "@/lib/repositories/reads";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { autoReconcileBills } from "./bills";
+import { applyEditsToPosted, withPendingEdits } from "./card-edits";
 import { applyAutoOurs } from "./cards";
 import { syncInvestments } from "./investments-sync";
 import { refreshMilestonesForOwner } from "./plans";
@@ -242,6 +243,8 @@ export async function syncItem(userId: string, pluggyItemId: string) {
   await admin.from("pluggy_items").update({ last_sync_at: new Date().toISOString() }).eq("user_id", userId).eq("id", row.id);
   await applyRulesToRecent(userId, from, syncStartedAt);
   await applyAutoOurs(userId, syncStartedAt);
+  // After the automatic owner: what the person chose for a pending purchase wins once it posts.
+  await applyEditsToPosted(userId).catch((error) => console.error("card edits failed", error instanceof Error ? error.message : error));
   await runSubscriptionDetection(userId);
   const { settled } = await autoReconcileBills(userId);
   return { accounts: accounts.length, imported, settled, status: item.status, executionStatus: item.executionStatus ?? null, perAccount, investments };
@@ -439,7 +442,8 @@ async function savePendingCardItems(
   const { error: deleteError } = await admin.from("card_pending_items").delete().eq("user_id", userId).eq("account_id", accountId);
   if (deleteError) throw new Error(`Falha ao atualizar a fatura aberta: ${deleteError.message}`);
   if (rows.length === 0) return;
-  const { error } = await admin.from("card_pending_items").insert(rows);
+  // The person's tag, description and owner for these purchases survive the new snapshot.
+  const { error } = await admin.from("card_pending_items").insert(await withPendingEdits(userId, accountId, rows));
   if (error) throw new Error(`Falha ao salvar a fatura aberta: ${error.message}`);
 }
 

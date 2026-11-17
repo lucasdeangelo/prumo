@@ -2,12 +2,15 @@ import "server-only";
 
 import { notFound, redirect } from "next/navigation";
 
+import { loadPendingItem } from "@/lib/application/card-edits";
 import { householdCards, loadInvoice, type InvoiceLine, type InvoiceOwner } from "@/lib/application/cards";
 import { lastSyncAt } from "@/lib/application/couple-data";
+import { getHousehold } from "@/lib/application/household";
 import { requireUser } from "@/lib/auth/session";
 import { firstShare, sharePercentLabel } from "@/lib/domain/couple";
 import { daysBetween, formatDayShort, todayIn } from "@/lib/domain/dates";
 import { buildPixPayload, maskPixKey } from "@/lib/domain/pix";
+import { listTags } from "@/lib/repositories/reads";
 import { transactionLabel } from "@/lib/types";
 
 import { person } from "./shared";
@@ -63,17 +66,20 @@ export async function cards(_: Record<string, string>, search: Record<string, st
       installment: line.fact.installment_number && line.fact.installment_total ? `${line.fact.installment_number}/${line.fact.installment_total}` : null,
       cents: line.fact.amount_cents,
       credit: line.fact.type === "credit",
+      href: `/transactions/${line.fact.id}` as string | null,
     })),
     ...selected.pendingLines.map((p) => ({
       kind: "pending" as const,
       key: `p-${p.item.id}`,
       id: p.item.id,
       date: p.item.transaction_date,
-      title: p.item.description,
-      category: p.category,
+      title: p.item.user_description ?? p.item.description,
+      category: [p.category, p.item.scope === "ours" ? "Nosso" : p.item.scope === "partner" && partner ? `De ${partner.name}` : ""].filter(Boolean).join(" · "),
       installment: p.item.installment_number && p.item.installment_total ? `${p.item.installment_number}/${p.item.installment_total}` : null,
       cents: p.item.amount_cents,
       credit: p.item.type === "credit",
+      // Only the card holder edits what is still pending at the bank.
+      href: selected.holderIsViewer ? `/cards/${selected.card.id}/item/${encodeURIComponent(p.item.provider_transaction_id)}?m=${offset}` : null,
     })),
   ].sort((a, b) => b.date.localeCompare(a.date));
 
@@ -250,5 +256,21 @@ export async function cardSplit({ id }: Record<string, string>, search: Record<s
         };
       }),
     })),
+  };
+}
+
+// ---------- /cards/:id/item/:pid ----------
+
+/** A purchase still pending at the bank, for its holder to tag, rename or say whose it is. */
+export async function cardItem({ id, pid }: Record<string, string>, search: Record<string, string>) {
+  if (!/^[0-9a-f-]{36}$/i.test(id ?? "") || !/^[\w-]{1,100}$/.test(pid ?? "")) notFound();
+  const { user, db } = await requireUser();
+  const [item, tags, household] = await Promise.all([loadPendingItem(user.id, id, pid), listTags(db, user.id), getHousehold(user.id)]);
+  if (!item) notFound();
+  return {
+    item,
+    tags: tags.map((t) => ({ id: t.id, name: t.name })),
+    partnerName: household?.partner?.name ?? null,
+    back: `/cards?card=${id}${search.m ? `&m=${encodeURIComponent(search.m)}` : ""}`,
   };
 }

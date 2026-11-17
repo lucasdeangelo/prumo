@@ -9,7 +9,7 @@ import { Button, Card, EmptyState, Flex, HideValuesButton, ListGroup, PageHeader
 import { Screen } from "@/ui/screen";
 import { colors, radius, segmentShadow, type Person } from "@/ui/theme";
 
-type InvoiceRow = { kind: "fact" | "pending"; key: string; id: string; date: string; title: string; category: string; installment: string | null; cents: number; credit: boolean };
+type InvoiceRow = { kind: "fact" | "pending"; key: string; id: string; date: string; title: string; category: string; installment: string | null; cents: number; credit: boolean; href?: string | null };
 type Data =
   | { empty: true }
   | {
@@ -243,5 +243,7 @@ function InvoiceLine({ row, future }: { row: InvoiceRow; future: boolean }) {
     </>
   );
   const style = { minHeight: 56, flexDirection: "row" as const, alignItems: "center" as const, gap: 12, paddingHorizontal: 16, paddingVertical: 12 };
-  return row.kind === "fact" ? <Press href={`/transactions/${row.id}`} style={style} pressedStyle={{ backgroundColor: colors.rowPress }}>{body}</Press> : <View style={style}>{body}</View>;
+  // Older servers send no href: facts still open their transaction, pending items stay read-only.
+  const href = row.href !== undefined ? row.href : row.kind === "fact" ? `/transactions/${row.id}` : null;
+  return href ? <Press href={href} style={style} pressedStyle={{ backgroundColor: colors.rowPress }}>{body}</Press> : <View style={style}>{body}</View>;
 }

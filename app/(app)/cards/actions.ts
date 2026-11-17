@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/auth/session";
+import { editPendingItem } from "@/lib/application/card-edits";
 import { recordInvoiceSettlement, setAutoOurs, setInvoiceOwner } from "@/lib/application/cards";
 import { DomainError } from "@/lib/application/transactions";
 import { safeRelativePath } from "@/lib/safe-path";
@@ -63,6 +64,35 @@ export async function settleInvoiceAction(formData: FormData) {
     } catch (error) {
       if (!(error instanceof DomainError)) throw error;
     }
+  }
+  revalidatePath("/", "layout");
+  redirect(back(formData, "/cards"));
+}
+
+/** A purchase still pending at the bank: tag, name and owner, kept until the bank confirms it. */
+export async function editCardItemAction(_: CardsState, formData: FormData): Promise<CardsState> {
+  const { user } = await requireUser();
+  const parsed = z
+    .object({
+      accountId: z.uuid(),
+      providerId: z.string().min(1).max(100),
+      tagId: z.union([z.uuid(), z.literal("")]).optional(),
+      description: z.string().max(120).optional(),
+      scope: z.enum(["mine", "ours", "partner"]).default("mine"),
+    })
+    .safeParse({
+      accountId: formData.get("accountId"),
+      providerId: formData.get("providerId"),
+      tagId: formData.get("tagId") ?? undefined,
+      description: formData.get("description") ?? undefined,
+      scope: formData.get("scope") ?? undefined,
+    });
+  if (!parsed.success) return { error: "Confira os campos." };
+  const { accountId, providerId, tagId, description, scope } = parsed.data;
+  try {
+    await editPendingItem(user.id, { accountId, providerId, tagId: tagId || null, description: description || null, scope });
+  } catch (error) {
+    return { error: error instanceof DomainError ? error.message : "Não foi possível salvar." };
   }
   revalidatePath("/", "layout");
   redirect(back(formData, "/cards"));

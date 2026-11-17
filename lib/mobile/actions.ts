@@ -77,6 +77,7 @@ export const MOBILE_ACTIONS = {
   cycleOwner: form(cards.cycleOwnerAction),
   batchOwner: state(cards.batchOwnerAction),
   settleInvoice: form(cards.settleInvoiceAction),
+  editCardItem: state(cards.editCardItemAction),
   // Conexão com bancos
   connectToken: none(connect.connectTokenAction),
   stageConnection: id(connect.stageConnectionAction),

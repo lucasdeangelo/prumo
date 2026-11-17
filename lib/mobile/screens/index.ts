@@ -26,6 +26,7 @@ const ROUTES: Array<[string, Loader]> = [
   ["cards/:id/batch", cards.cardBatch],
   ["cards/:id/settle", cards.cardSettle],
   ["cards/:id/split", cards.cardSplit],
+  ["cards/:id/item/:pid", cards.cardItem],
   ["connect", settings.connect],
   ["settings", settings.settings],
   ["settings/accounts", settings.manualAccounts],

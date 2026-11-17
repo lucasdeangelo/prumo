@@ -178,7 +178,7 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
         <SectionHeader title="Lançamentos da fatura" action={<span className="text-[13px] text-muted-foreground">{rows.length} itens</span>} />
         {rows.length > 0 ? (
           <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
-            {shownRows.map((row) => (row.kind === "pending" ? <PendingRow key={`p-${row.pending.item.id}`} pending={row.pending} future={status === "future"} /> : <FactRow key={row.line.fact.id} line={row.line} />))}
+            {shownRows.map((row) => (row.kind === "pending" ? <PendingRow key={`p-${row.pending.item.id}`} pending={row.pending} future={status === "future"} href={selected.holderIsViewer ? `/cards/${card.id}/item/${encodeURIComponent(row.pending.item.provider_transaction_id)}?m=${offset}` : null} partnerName={partner?.name ?? null} /> : <FactRow key={row.line.fact.id} line={row.line} />))}
             {selected.cancelledLines.map((item) => (
               <li key={`c-${item.id}`} className="flex min-h-14 items-center gap-3 px-4 py-3 text-muted-foreground">
                 <span className="min-w-0 flex-1">
@@ -254,16 +254,26 @@ function FactRow({ line }: { line: Invoice["lines"][number] }) {
   );
 }
 
-function PendingRow({ pending, future }: { pending: Invoice["pendingLines"][number]; future: boolean }) {
+const OWNER_LABEL = { ours: "Nosso", mine: "", partner: "" } as const;
+
+/** Pending at the bank: the card holder opens it to tag, rename or say whose it is. */
+function PendingRow({ pending, future, href, partnerName }: { pending: Invoice["pendingLines"][number]; future: boolean; href: string | null; partnerName: string | null }) {
   const { item, category } = pending;
-  return (
-    <li className="flex min-h-14 items-center gap-3 px-4 py-3">
+  const owner = item.scope === "partner" && partnerName ? `De ${partnerName}` : OWNER_LABEL[item.scope];
+  const content = (
+    <>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] font-medium">{item.description}</span>
-        <span className="block text-[13px] text-muted-foreground">{category} · {formatDayShort(item.transaction_date)} · {future ? "agendada" : "em processamento"}</span>
+        <span className="block truncate text-[15px] font-medium">{item.user_description ?? item.description}</span>
+        <span className="block text-[13px] text-muted-foreground">{category}{owner ? ` · ${owner}` : ""} · {formatDayShort(item.transaction_date)} · {future ? "agendada" : "em processamento"}</span>
       </span>
       {item.installment_number && item.installment_total ? <span className="text-[12px] text-muted-foreground">{item.installment_number}/{item.installment_total}</span> : null}
       <Amount cents={item.amount_cents} type={item.type === "credit" ? "in" : undefined} className="text-[15px]" />
+    </>
+  );
+  if (!href) return <li className="flex min-h-14 items-center gap-3 px-4 py-3">{content}</li>;
+  return (
+    <li>
+      <Link href={href} className="flex min-h-14 items-center gap-3 px-4 py-3 text-foreground no-underline hover:text-foreground">{content}</Link>
     </li>
   );
 }

@@ -243,6 +243,12 @@ export async function cardInvoices(household: Household, accountsIn: Awaitable<A
 
 export type PendingCardItem = {
   id: string;
+  /** Pluggy id: stable while the item is pending (the row id changes on every sync). */
+  provider_transaction_id: string;
+  /** The person's own name for it, and whose it is (edits carried to the posted transaction). */
+  user_description: string | null;
+  scope: "mine" | "ours" | "partner";
+  edited: boolean;
   bill_month: string;
   transaction_date: string;
   description: string;
@@ -283,7 +289,7 @@ export type InvoiceWindow = {
   ahead: Array<{ month: string; cents: number }>;
 };
 
-const PENDING_COLUMNS = "id, bill_month, transaction_date, description, amount_cents, type, tag_id, card_last4, installment_number, installment_total, cancelled_by_refund";
+const PENDING_COLUMNS = "id, provider_transaction_id, bill_month, transaction_date, description, user_description, amount_cents, type, tag_id, scope, edited, card_last4, installment_number, installment_total, cancelled_by_refund";
 
 /**
  * One invoice of a card, `offset` months from the open one. Cards connected through Open Finance
