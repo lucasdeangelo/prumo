@@ -1,23 +1,40 @@
 import * as SecureStore from "expo-secure-store";
 import { createContext, useContext, useSyncExternalStore } from "react";
+import { AppState } from "react-native";
 
 // "Esconder valores", same as the web eye button: every amount shows as "R$ ••••".
-// The choice lives on this phone. It is read together with the session (lib/session.tsx), so the
-// first screen already comes masked.
-const KEY = "prumo_hide_values";
+// Every opening starts hidden: on launch, and when the app comes back after a while in the
+// background. Showing them lasts until then. Nothing is stored on the phone any more.
+const LEGACY_KEY = "prumo_hide_values";
+// Back from the bank's app or a quick share keeps what you chose; a longer pause hides again.
+const RESUME_GRACE_MS = 60_000;
 
-let hidden = false;
+let hidden = true;
+let backgroundSince: number | null = null;
 const listeners = new Set<() => void>();
 
-export async function loadHideValues() {
-  hidden = (await SecureStore.getItemAsync(KEY).catch(() => null)) === "1";
+function set(next: boolean) {
+  hidden = next;
   listeners.forEach((l) => l());
 }
 
+/** Called with the session on launch (lib/session.tsx), so the first screen already comes masked. */
+export async function loadHideValues() {
+  set(true);
+  // Before every opening started hidden, the choice was kept here; it is no longer used.
+  await SecureStore.deleteItemAsync(LEGACY_KEY).catch(() => {});
+}
+
+AppState.addEventListener("change", (state) => {
+  if (state === "background") backgroundSince = Date.now();
+  else if (state === "active") {
+    if (backgroundSince !== null && Date.now() - backgroundSince > RESUME_GRACE_MS && !hidden) set(true);
+    backgroundSince = null;
+  }
+});
+
 export function setHideValues(next: boolean) {
-  hidden = next;
-  listeners.forEach((l) => l());
-  (next ? SecureStore.setItemAsync(KEY, "1") : SecureStore.deleteItemAsync(KEY)).catch(() => {});
+  set(next);
 }
 
 function subscribe(listener: () => void) {

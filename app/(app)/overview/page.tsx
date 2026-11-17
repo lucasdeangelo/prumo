@@ -19,6 +19,7 @@ import {
   partnerView,
   pendingApprovalsFor,
 } from "@/lib/application/couple-data";
+import { groupAccountsByBank } from "@/lib/domain/account-groups";
 import { daysLeftInMonth } from "@/lib/domain/couple";
 import { addMonths, formatDayShort, formatMonthLong, monthBounds, monthOf, todayIn } from "@/lib/domain/dates";
 import { formatBRL } from "@/lib/domain/money";
@@ -108,6 +109,8 @@ async function MeuHome({ userId, db, household, ctxIn, today, month, lowerMonth,
   const recentMine = myHistory.filter((t) => t.transaction_date >= monthBounds(month).start).slice(0, 3);
   // Card balances are debt, shown in Cartões; the balance here is what is in the accounts.
   const bankAccounts = accounts.filter((a) => a.balance_cents !== null && a.type !== "CREDIT");
+  const banks = groupAccountsByBank(accounts);
+  const sameVisibility = new Set(accounts.map((a) => a.visibility)).size === 1 ? accounts[0]?.visibility ?? null : null;
 
   return (
     <>
@@ -132,24 +135,63 @@ async function MeuHome({ userId, db, household, ctxIn, today, month, lowerMonth,
 
       {accounts.length > 0 ? (
         <section className="grid gap-1.5">
-          <SectionHeader title="Suas contas" action={hasPartner ? <Link href="/privacy/visibility" className="flex min-h-11 items-center text-sm font-medium">Visibilidade</Link> : undefined} />
-          <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
-            {accounts.map((a) => (
-              <li key={a.id}>
-                <Link href={`/accounts/${a.id}`} className="flex min-h-11 items-center gap-2.5 px-3 py-1.5 text-foreground no-underline hover:text-foreground">
-                  <InstitutionMark name={a.institution ?? a.name} size="sm" />
-                  <span className="min-w-0 flex-1 truncate text-sm">
-                    <span className="font-medium">{a.type === "CREDIT" ? `Cartão ${a.institution ?? a.name}` : a.institution ?? a.name}</span>
-                    {a.card_last4 ? <span className="text-muted-foreground"> •• {a.card_last4}</span> : null}
-                    {hasPartner ? <span className="text-[12px] text-muted-foreground"> · {VISIBILITY_SHORT[a.visibility]}</span> : null}
-                  </span>
-                  {a.balance_cents !== null ? (
-                    // Card balances are stored as debt (negative); a checking account below zero is overdraft.
-                    <Amount cents={a.type === "CREDIT" ? Math.abs(a.balance_cents) : a.balance_cents} className="text-sm" />
-                  ) : null}
+          <SectionHeader
+            title="Suas contas"
+            action={
+              hasPartner ? (
+                <Link href="/privacy/visibility" className="flex min-h-11 items-center text-sm font-medium">
+                  {sameVisibility ? VISIBILITY_SHORT[sameVisibility].charAt(0).toUpperCase() + VISIBILITY_SHORT[sameVisibility].slice(1) : "Visibilidade"}
                 </Link>
-              </li>
-            ))}
+              ) : undefined
+            }
+          />
+          {/* One row per bank; each product (conta, poupança, cartão) opens its own page. */}
+          <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+            {banks.map((bank) => {
+              const only = bank.products.length === 1 ? bank.products[0] : null;
+              const name = (
+                <span className="flex items-baseline gap-1.5 text-sm">
+                  <span className="truncate font-medium">{bank.name}</span>
+                  {only && (only.last4 || (only.label !== "Conta" && only.label !== bank.name)) ? (
+                    <span className="shrink-0 text-muted-foreground">{[only.label !== "Conta" && only.label !== bank.name ? only.label : null, only.last4 ? `•• ${only.last4}` : null].filter(Boolean).join(" ")}</span>
+                  ) : null}
+                  {hasPartner && !sameVisibility && bank.visibility ? <span className="shrink-0 text-[12px] text-muted-foreground">{VISIBILITY_SHORT[bank.visibility]}</span> : null}
+                </span>
+              );
+              const balance = bank.balanceCents !== null ? <Amount cents={bank.balanceCents} className="text-sm" /> : null;
+              // A bank with a single account is one tappable row, as before.
+              if (only) {
+                return (
+                  <li key={bank.key}>
+                    <Link href={`/accounts/${only.id}`} className="flex min-h-11 items-center gap-2.5 px-3 py-1.5 text-foreground no-underline hover:text-foreground">
+                      <InstitutionMark name={bank.name} size="sm" />
+                      <span className="min-w-0 flex-1">{name}</span>
+                      {balance}
+                    </Link>
+                  </li>
+                );
+              }
+              return (
+                <li key={bank.key} className="flex items-center gap-2.5 px-3 py-1.5">
+                  <InstitutionMark name={bank.name} size="sm" />
+                  <span className="min-w-0 flex-1">
+                    {name}
+                    <span className="mt-0.5 flex flex-wrap gap-1">
+                      {bank.products.map((product) => {
+                        // The last digits only when two products of the bank share a name ("Conta", "Conta").
+                        const twin = bank.products.some((p) => p !== product && p.label === product.label);
+                        return (
+                          <Link key={product.id} href={`/accounts/${product.id}`} aria-label={`${bank.name} · ${product.label}${product.last4 ? ` final ${product.last4}` : ""}`} className="inline-flex min-h-6 items-center rounded-full bg-muted px-2 text-[12px] text-muted-foreground no-underline hover:text-foreground">
+                            {product.label}{twin && product.last4 ? ` •• ${product.last4}` : ""}
+                          </Link>
+                        );
+                      })}
+                    </span>
+                  </span>
+                  {balance}
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}

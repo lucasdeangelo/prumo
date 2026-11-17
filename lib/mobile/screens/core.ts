@@ -105,7 +105,7 @@ async function meuHome(userId: string, db: Parameters<typeof listTags>[0], house
     freeMoney: freeMoney ? { ...freeMoney, renewsMonth: monthName.format(new Date(`${freeMoney.renewsOn}T00:00:00Z`)) } : null,
     balanceCents,
     hasBalance: bankAccounts.length > 0,
-    accounts: accounts.map((a) => ({ id: a.id, name: a.name, institution: a.institution, type: a.type, card_last4: a.card_last4, visibility: a.visibility, balance_cents: a.balance_cents })),
+    accounts: accounts.map((a) => ({ id: a.id, name: a.name, institution: a.institution, type: a.type, subtype: a.subtype, pluggy_item_id: a.pluggy_item_id, card_last4: a.card_last4, visibility: a.visibility, balance_cents: a.balance_cents })),
     recentMine: hasPartner
       ? recentMine.map((t) => ({ id: t.id, label: transactionLabel(t), cents: t.amount_cents, type: t.type, date: t.transaction_date, surprise_until: t.surprise_until, free_money: t.free_money, privacy: t.privacy }))
       : [],

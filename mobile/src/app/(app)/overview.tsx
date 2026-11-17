@@ -1,3 +1,4 @@
+import { groupAccountsByBank, type BankGroup } from "@domain/account-groups";
 import { formatDayShort, formatMonthLong } from "@domain/dates";
 import { formatBRL } from "@domain/money";
 import { View } from "react-native";
@@ -29,7 +30,8 @@ type MeuData = {
   freeMoney: { allowanceCents: number; usedCents: number; remainingCents: number; renewsMonth: string } | null;
   balanceCents: number;
   hasBalance: boolean;
-  accounts: { id: string; name: string; institution: string | null; type: string | null; card_last4: string | null; visibility: "private" | "totals" | "details"; balance_cents: number | null }[];
+  // subtype and pluggy_item_id come from servers newer than 2.0.1; older ones group by institution only.
+  accounts: { id: string; name: string; institution: string | null; type: string | null; subtype?: string | null; pluggy_item_id?: string | null; card_last4: string | null; visibility: "private" | "totals" | "details"; balance_cents: number | null }[];
   recentMine: { id: string; label: string; cents: number; type: "credit" | "debit"; date: string; surprise_until: string | null; free_money: boolean; privacy: string }[];
   pendingCount: number;
   analytics: HomeAnalyticsView;
@@ -49,6 +51,51 @@ type NossoData = {
 };
 
 const VISIBILITY_SHORT = { private: "só eu vejo", totals: "só totais", details: "com detalhes" } as const;
+
+const rowStyle = { minHeight: 44, flexDirection: "row" as const, alignItems: "center" as const, gap: 10, paddingHorizontal: 12, paddingVertical: 6 };
+
+/** One bank of "Suas contas": a single account is one tappable row; several get a small link each. */
+function BankRow({ bank, visibility }: { bank: BankGroup; visibility: keyof typeof VISIBILITY_SHORT | null }) {
+  const only = bank.products.length === 1 ? bank.products[0] : null;
+  const onlyDetail = only ? [only.label !== "Conta" && only.label !== bank.name ? only.label : null, only.last4 ? `•• ${only.last4}` : null].filter(Boolean).join(" ") : "";
+  const name = (
+    <Txt size={14} numberOfLines={1}>
+      <Txt size={14} weight="medium">{bank.name}</Txt>
+      {onlyDetail ? <Txt size={14} color={colors.mutedForeground}> {onlyDetail}</Txt> : null}
+      {visibility ? <Txt size={12} color={colors.mutedForeground}> · {VISIBILITY_SHORT[visibility]}</Txt> : null}
+    </Txt>
+  );
+  const balance = bank.balanceCents !== null ? <Amount cents={bank.balanceCents} size={14} /> : null;
+  if (only) {
+    return (
+      <Press href={`/accounts/${only.id}`} style={rowStyle} pressedStyle={{ backgroundColor: colors.rowPress }}>
+        <InstitutionMark name={bank.name} size="sm" />
+        <View style={{ flex: 1 }}>{name}</View>
+        {balance}
+      </Press>
+    );
+  }
+  return (
+    <View style={rowStyle}>
+      <InstitutionMark name={bank.name} size="sm" />
+      <View style={{ flex: 1, gap: 4 }}>
+        {name}
+        <Row gap={4} style={{ flexWrap: "wrap" }}>
+          {bank.products.map((product) => {
+            // The last digits only when two products of the bank share a name ("Conta", "Conta").
+            const twin = bank.products.some((p) => p !== product && p.label === product.label);
+            return (
+              <Press key={product.id} href={`/accounts/${product.id}`} label={`${bank.name} · ${product.label}${product.last4 ? ` final ${product.last4}` : ""}`} style={{ minHeight: 24, justifyContent: "center", borderRadius: radius.full, backgroundColor: colors.muted, paddingHorizontal: 8 }} pressedStyle={{ backgroundColor: colors.rowPress }}>
+                <Txt size={12} color={colors.mutedForeground}>{product.label}{twin && product.last4 ? ` •• ${product.last4}` : ""}</Txt>
+              </Press>
+            );
+          })}
+        </Row>
+      </View>
+      {balance}
+    </View>
+  );
+}
 const cardStyle = { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, padding: 20 } as const;
 const rowCard = { minHeight: 56, flexDirection: "row", alignItems: "center", gap: 12, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, paddingHorizontal: 16, paddingVertical: 12 } as const;
 
@@ -88,6 +135,8 @@ function PrivacyBadge({ tx, today, partnerName }: { tx: MeuData["recentMine"][nu
 
 function MeuHome({ d, m }: { d: Data; m: MeuData }) {
   const partnerName = m.partnerName;
+  const banks = groupAccountsByBank(m.accounts.map((a) => ({ ...a, subtype: a.subtype ?? null, pluggy_item_id: a.pluggy_item_id ?? null })));
+  const sameVisibility = new Set(m.accounts.map((a) => a.visibility)).size === 1 ? m.accounts[0]?.visibility ?? null : null;
   return (
     <>
       <View style={{ gap: 4 }}>
@@ -117,19 +166,13 @@ function MeuHome({ d, m }: { d: Data; m: MeuData }) {
 
       {m.accounts.length > 0 ? (
         <View style={{ gap: 6 }}>
-          <SectionHeader title="Suas contas" action={m.hasPartner ? <TextLink href="/privacy/visibility">Visibilidade</TextLink> : undefined} />
+          <SectionHeader
+            title="Suas contas"
+            action={m.hasPartner ? <TextLink href="/privacy/visibility">{sameVisibility ? VISIBILITY_SHORT[sameVisibility].charAt(0).toUpperCase() + VISIBILITY_SHORT[sameVisibility].slice(1) : "Visibilidade"}</TextLink> : undefined}
+          />
+          {/* One row per bank; each product (conta, poupança, cartão) opens its own page. */}
           <ListGroup>
-            {m.accounts.map((a) => (
-              <Press key={a.id} href={`/accounts/${a.id}`} style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 6 }} pressedStyle={{ backgroundColor: colors.rowPress }}>
-                <InstitutionMark name={a.institution ?? a.name} size="sm" />
-                <Txt size={14} numberOfLines={1} style={{ flex: 1 }}>
-                  <Txt size={14} weight="medium">{a.type === "CREDIT" ? `Cartão ${a.institution ?? a.name}` : a.institution ?? a.name}</Txt>
-                  {a.card_last4 ? <Txt size={14} color={colors.mutedForeground}> •• {a.card_last4}</Txt> : null}
-                  {m.hasPartner ? <Txt size={12} color={colors.mutedForeground}> · {VISIBILITY_SHORT[a.visibility]}</Txt> : null}
-                </Txt>
-                {a.balance_cents !== null ? <Amount cents={a.type === "CREDIT" ? Math.abs(a.balance_cents) : a.balance_cents} size={14} /> : null}
-              </Press>
-            ))}
+            {banks.map((bank) => <BankRow key={bank.key} bank={bank} visibility={m.hasPartner && !sameVisibility ? bank.visibility : null} />)}
           </ListGroup>
         </View>
       ) : null}
