@@ -7,7 +7,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { cancelBill, createBill, markBillPaid } from "@/lib/application/bills";
 import { refreshAndSyncItem } from "@/lib/application/pluggy-sync";
-import { createSubscription, runSubscriptionDetection, setSubscriptionStatus } from "@/lib/application/subscriptions";
+import { createSubscription, decideTaggedMerchant, runSubscriptionDetection, setSubscriptionStatus } from "@/lib/application/subscriptions";
 import { createTransaction, deleteTransaction, DomainError, updateTransaction } from "@/lib/application/transactions";
 import { getHousehold } from "@/lib/application/household";
 import { createLinkCode, unlinkWhatsapp } from "@/lib/application/whatsapp";
@@ -203,6 +203,15 @@ export async function subscriptionStatusAction(formData: FormData) {
   const parsed = z.object({ id: z.uuid(), status: z.enum(["active", "rejected", "cancelled", "paused"]) }).safeParse(fields(formData));
   if (!parsed.success) return;
   await setSubscriptionStatus(user.id, parsed.data.id, parsed.data.status);
+  refresh();
+}
+
+/** "Com a tag Assinaturas": add the merchant to the list, or say it is not a subscription. */
+export async function taggedSubscriptionAction(formData: FormData) {
+  const { user } = await requireUser();
+  const parsed = z.object({ key: z.string().trim().min(1).max(120), decision: z.enum(["add", "ignore"]) }).safeParse(fields(formData));
+  if (!parsed.success) return;
+  await decideTaggedMerchant(user.id, parsed.data.key, parsed.data.decision);
   refresh();
 }
 

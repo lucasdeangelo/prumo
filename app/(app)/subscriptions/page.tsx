@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { subscriptionStatusAction } from "@/app/(app)/actions";
+import { subscriptionStatusAction, taggedSubscriptionAction } from "@/app/(app)/actions";
 import { Amount, IconLink, PageHeader, StatTile, StateBadge } from "@/components/app/bits";
 import { HideValuesToggle } from "@/components/app/hide-values";
 import { PlusIcon, SparkIcon } from "@/components/app/icons";
@@ -15,6 +15,7 @@ import { UpdatedAt } from "@/components/app/couple";
 import { Money } from "@/components/app/money";
 import { lastSyncAt, loadSharedPlans } from "@/lib/application/couple-data";
 import { getHousehold } from "@/lib/application/household";
+import { loadTaggedOutside } from "@/lib/application/subscriptions";
 import type { Subscription } from "@/lib/types";
 
 export const metadata = { title: "Assinaturas · Prumo" };
@@ -24,6 +25,16 @@ function StatusButton({ id, status, label, variant = "outline" }: { id: string; 
     <form action={subscriptionStatusAction}>
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="status" value={status} />
+      <SubmitButton variant={variant} pendingText="…" className="w-full">{label}</SubmitButton>
+    </form>
+  );
+}
+
+function TaggedButton({ keyName, decision, label, variant = "outline" }: { keyName: string; decision: "add" | "ignore"; label: string; variant?: "default" | "outline" }) {
+  return (
+    <form action={taggedSubscriptionAction}>
+      <input type="hidden" name="key" value={keyName} />
+      <input type="hidden" name="decision" value={decision} />
       <SubmitButton variant={variant} pendingText="…" className="w-full">{label}</SubmitButton>
     </form>
   );
@@ -56,11 +67,12 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
   const ours = Boolean(partner) && aba === "nossas";
   const memberIds = [user.id, partner?.userId].filter(Boolean) as string[];
   // Minhas: mine only. Nossas: what either of us marked as the couple's.
-  const [subs, syncedAt] = await Promise.all([
+  const [subs, syncedAt, tagged] = await Promise.all([
     ours
       ? loadSharedPlans(memberIds).then((p) => p.subscriptions)
       : listSubscriptions(db, user.id).then((list) => list.filter((s) => !partner || s.scope !== "ours")),
     lastSyncAt(memberIds),
+    ours ? Promise.resolve([]) : loadTaggedOutside(user.id),
   ]);
   const active = subs.filter((s) => s.status === "active" || s.status === "paused");
   const candidates = subs.filter((s) => s.status === "candidate");
@@ -134,6 +146,32 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
           <EmptyState title="Nenhuma assinatura ativa">Adicione com o + ou deixe o Prumo encontrar nas suas movimentações.</EmptyState>
         )}
       </section>
+
+      {tagged.length > 0 ? (
+        <section className="grid gap-2">
+          <h2 className="px-1 text-sm font-semibold">Com a tag Assinaturas</h2>
+          <p className="-mt-1 px-1 text-[13px] text-muted-foreground">Gastos dos últimos 4 meses que você marcou como assinatura e ainda não estão na lista.</p>
+          <Card className="p-0">
+            <ul className="divide-y divide-border">
+              {tagged.map((t) => (
+                <li key={t.key} className="grid gap-3 p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{t.name}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{t.count === 1 ? "1 cobrança" : `${t.count} cobranças`} · última {formatDayShort(t.lastDate)}</p>
+                    </div>
+                    <Amount cents={t.amountCents} className="text-sm" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <TaggedButton keyName={t.key} decision="add" label="Adicionar" variant="default" />
+                    <TaggedButton keyName={t.key} decision="ignore" label="Não é assinatura" />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </section>
+      ) : null}
 
       <DetectButton />
 

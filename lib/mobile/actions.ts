@@ -28,6 +28,7 @@ export const MOBILE_ACTIONS = {
   cancelBill: form(app.cancelBillAction),
   createSubscription: state(app.createSubscriptionAction),
   subscriptionStatus: form(app.subscriptionStatusAction),
+  taggedSubscription: form(app.taggedSubscriptionAction),
   detectSubscriptions: none(app.detectSubscriptionsAction),
   createTag: state(app.createTagAction),
   createRule: state(app.createRuleAction),

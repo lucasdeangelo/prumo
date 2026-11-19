@@ -13,7 +13,9 @@ import { Screen } from "@/ui/screen";
 import { colors, radius } from "@/ui/theme";
 
 type Sub = { id: string; name: string; amount_cents: number; frequency: RecurrenceType; next_charge_date: string | null; status: string; detection_confidence: number | null; editable: boolean };
-type Data = { ours: boolean; hasPartner: boolean; meName: string | null; partnerName: string | null; syncedAt: string | null; monthlyCents: number; activeCount: number; candidates: Sub[]; active: Sub[]; past: Sub[] };
+type Tagged = { key: string; name: string; amountCents: number; lastDate: string; count: number };
+// tagged comes from servers newer than 2.0.2.
+type Data = { ours: boolean; hasPartner: boolean; meName: string | null; partnerName: string | null; syncedAt: string | null; monthlyCents: number; activeCount: number; candidates: Sub[]; active: Sub[]; past: Sub[]; tagged?: Tagged[] };
 
 export default function Subscriptions() {
   const { aba } = useLocalSearchParams<{ aba?: string }>();
@@ -27,6 +29,7 @@ export default function Subscriptions() {
 function SubscriptionsView({ d }: { d: Data }) {
   const status = useAction("subscriptionStatus");
   const detect = useAction("detectSubscriptions");
+  const tagged = useAction("taggedSubscription");
   const [showPast, setShowPast] = useState(false);
   const set = (id: string, value: string) => status.run({ id, status: value });
 
@@ -87,6 +90,30 @@ function SubscriptionsView({ d }: { d: Data }) {
           <EmptyState title="Nenhuma assinatura ativa">Adicione com o + ou deixe o Prumo encontrar nas suas movimentações.</EmptyState>
         )}
       </View>
+
+      {d.tagged && d.tagged.length > 0 ? (
+        <View style={{ gap: 8 }}>
+          <Txt size={14} weight="semibold" style={{ paddingHorizontal: 4 }}>Com a tag Assinaturas</Txt>
+          <Txt size={13} color={colors.mutedForeground} style={{ paddingHorizontal: 4, marginTop: -4 }}>Gastos dos últimos 4 meses que você marcou como assinatura e ainda não estão na lista.</Txt>
+          <ListGroup>
+            {d.tagged.map((t) => (
+              <View key={t.key} style={{ gap: 12, padding: 12 }}>
+                <Row>
+                  <Flex>
+                    <Txt size={14} weight="medium" numberOfLines={1}>{t.name}</Txt>
+                    <Txt size={12} color={colors.mutedForeground} style={{ marginTop: 2 }}>{t.count === 1 ? "1 cobrança" : `${t.count} cobranças`} · última {formatDayShort(t.lastDate)}</Txt>
+                  </Flex>
+                  <Amount cents={t.amountCents} size={14} />
+                </Row>
+                <Row gap={8}>
+                  <Button style={{ flex: 1 }} pending={tagged.pending} pendingText="…" onPress={() => tagged.run({ key: t.key, decision: "add" })}>Adicionar</Button>
+                  <Button style={{ flex: 1 }} variant="outline" pending={tagged.pending} pendingText="…" onPress={() => tagged.run({ key: t.key, decision: "ignore" })}>Não é assinatura</Button>
+                </Row>
+              </View>
+            ))}
+          </ListGroup>
+        </View>
+      ) : null}
 
       <View style={{ gap: 8 }}>
         <Button variant="outline" pending={detect.pending} pendingText="Procurando…" onPress={() => detect.run()}>Procurar assinaturas nas movimentações</Button>

@@ -21,6 +21,7 @@ import {
 } from "@/lib/application/couple-data";
 import { getHousehold, type Household } from "@/lib/application/household";
 import { overdraftFor, overdraftNow, type AccountOverdraft } from "@/lib/application/overdraft";
+import { loadTaggedOutside } from "@/lib/application/subscriptions";
 import { requireUser } from "@/lib/auth/session";
 import { daysLeftInMonth } from "@/lib/domain/couple";
 import { addDays, addMonths, isMonthKey, monthBounds, monthOf, todayIn } from "@/lib/domain/dates";
@@ -380,9 +381,10 @@ export async function subscriptions(_: Record<string, string>, search: Record<st
   const partner = household?.partner ?? null;
   const ours = Boolean(partner) && search.aba === "nossas";
   const memberIds = [user.id, partner?.userId].filter(Boolean) as string[];
-  const [subs, syncedAt] = await Promise.all([
+  const [subs, syncedAt, tagged] = await Promise.all([
     ours ? loadSharedPlans(memberIds).then((p) => p.subscriptions) : listSubscriptions(db, user.id).then((list) => list.filter((s) => !partner || s.scope !== "ours")),
     lastSyncAt(memberIds),
+    ours ? Promise.resolve([]) : loadTaggedOutside(user.id),
   ]);
   const view = (s: (typeof subs)[number]) => ({
     id: s.id,
@@ -405,6 +407,8 @@ export async function subscriptions(_: Record<string, string>, search: Record<st
     candidates: subs.filter((s) => s.status === "candidate").map(view),
     active: subs.filter((s) => s.status === "active" || s.status === "paused").map(view),
     past: subs.filter((s) => s.status === "cancelled").map(view),
+    // "Com a tag Assinaturas": merchants tagged by the person and not in the list yet.
+    tagged,
   };
 }
 

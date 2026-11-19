@@ -39,9 +39,12 @@ function looksLikeBill(merchant: string): boolean {
   return words.some((w) => NOT_SUBSCRIPTIONS.includes(w));
 }
 
+const compact = (text: string) => text.replace(/\s+/g, "");
+
 export function isKnownSubscription(merchant: string): boolean {
   const name = normalizeText(merchant);
-  return KNOWN_SUBSCRIPTIONS.some((known) => name.startsWith(known) || ` ${name} `.includes(` ${known} `));
+  // Banks split names ("open ai"): longer known names also match without spaces.
+  return KNOWN_SUBSCRIPTIONS.some((known) => name.startsWith(known) || ` ${name} `.includes(` ${known} `) || (known.length >= 5 && compact(name).startsWith(compact(known))));
 }
 
 const SHAPES: Array<{ frequency: Frequency; min: number; max: number }> = [
@@ -56,7 +59,24 @@ function shapeOf(intervals: number[]): Frequency | null {
   for (const shape of SHAPES) {
     if (intervals.every((d) => d >= shape.min && d <= shape.max)) return shape.frequency;
   }
+  // A long series survives one odd gap (a charge that came late or early), if the rest is regular.
+  if (intervals.length >= 3) {
+    const median = [...intervals].sort((a, b) => a - b)[Math.floor(intervals.length / 2)];
+    for (const shape of SHAPES) {
+      const fits = intervals.filter((d) => d >= shape.min && d <= shape.max).length;
+      if (median >= shape.min && median <= shape.max && fits >= intervals.length - 1) return shape.frequency;
+    }
+  }
   return null;
+}
+
+/** Same amount every time (10%, or 25% for known services), or a steady price that just changed. */
+function stableAmounts(amounts: number[], known: boolean): boolean {
+  const within = (list: number[], ratio: number) => Math.max(...list) <= Math.min(...list) * ratio;
+  if (within(amounts, known ? 1.25 : 1.1)) return true;
+  // A price change: at least two identical earlier charges, then a new price.
+  const earlier = amounts.slice(0, -1);
+  return earlier.length >= 2 && within(earlier, 1.02);
 }
 
 /**
@@ -82,7 +102,7 @@ export function detectSubscriptions(transactions: DetectableTransaction[], today
     const last = charges[charges.length - 1];
     const amounts = charges.map((c) => c.amount_cents);
     // Known services get room for price changes; unknown merchants must charge almost the same amount.
-    const stable = Math.max(...amounts) <= Math.min(...amounts) * (known ? 1.25 : 1.1);
+    const stable = stableAmounts(amounts, known);
 
     let frequency: Frequency | null = null;
     if (charges.length >= 2) {
@@ -127,4 +147,46 @@ export function chargeMatchesSubscription(
   const sameMerchant = merchant === name || merchant.startsWith(`${name} `) || name.startsWith(`${merchant} `);
   const ratio = tx.amount_cents / subscription.amount_cents;
   return sameMerchant && ratio >= 0.75 && ratio <= 1.25;
+}
+
+// ---------- Tagged "Assinaturas" but not in the list ----------
+
+export type TaggedCharge = { key: string; amount_cents: number; date: string };
+
+export type TaggedOutside = {
+  key: string;
+  name: string;
+  amountCents: number;
+  lastDate: string;
+  count: number;
+};
+
+/** Whether a merchant key is this subscription: same key, one a word-prefix of the other, or every word of the name in it. */
+export function merchantIsSubscription(key: string, subscriptionName: string): boolean {
+  if (!key || !subscriptionName) return false;
+  if (key === subscriptionName || key.startsWith(`${subscriptionName} `) || subscriptionName.startsWith(`${key} `)) return true;
+  const words = new Set(key.split(" "));
+  return subscriptionName.split(" ").every((w) => words.has(w));
+}
+
+/**
+ * Merchants the person tagged "Assinaturas" that the list does not have yet (any status: a
+ * rejected or cancelled one was already decided). Variants of one merchant ("vivo", "vivo easy")
+ * are one entry. Most recent first.
+ */
+export function taggedOutsideList(charges: TaggedCharge[], subscriptionNames: string[]): TaggedOutside[] {
+  const loose = charges.filter((c) => c.key && !subscriptionNames.some((name) => merchantIsSubscription(c.key, name)));
+  const groups: Array<{ key: string; charges: TaggedCharge[] }> = [];
+  // Shorter keys first, so "vivo" collects "vivo easy" and not the other way round.
+  for (const charge of [...loose].sort((a, b) => a.key.length - b.key.length || a.key.localeCompare(b.key))) {
+    const group = groups.find((g) => merchantIsSubscription(charge.key, g.key));
+    if (group) group.charges.push(charge);
+    else groups.push({ key: charge.key, charges: [charge] });
+  }
+  return groups
+    .map((g) => {
+      const latest = g.charges.reduce((a, b) => (b.date > a.date ? b : a));
+      return { key: g.key, name: titleCase(g.key), amountCents: latest.amount_cents, lastDate: latest.date, count: g.charges.length };
+    })
+    .sort((a, b) => b.lastDate.localeCompare(a.lastDate) || a.key.localeCompare(b.key));
 }
